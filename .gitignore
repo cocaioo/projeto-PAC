@@ -1,0 +1,51 @@
+# =============================================================================
+# PAC UFPI — .gitignore
+# =============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.homologacao
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3*
+*.bak
+staticfiles/
+media/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker volumes
+pgdata/

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}DFD {{ dfd.numero }} - PAC UFPI{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'dfds:lista' %}">DFDs</a></li>
+            <li class="breadcrumb-item active">{{ dfd.numero }}</li>
+        </ol>
+    </nav>
+    <h1 class="h3 mb-0 fw-bold text-primary">DFD {{ dfd.numero }}</h1>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h2 class="h6 mb-0 fw-bold">Dados do Documento</h2>
+            </div>
+            <div class="card-body">
+                <p class="mb-1 small text-muted text-uppercase">Grupo de Contratação</p>
+                <p class="fw-bold mb-3">{{ dfd.grupo.nome }}</p>
+                
+                <p class="mb-1 small text-muted text-uppercase">Criado por</p>
+                <p class="mb-3">{{ dfd.criado_por.get_full_name|default:dfd.criado_por.username }}</p>
+                
+                <p class="mb-1 small text-muted text-uppercase">Data de Criação</p>
+                <p class="mb-3">{{ dfd.criado_em|date:"d/m/Y H:i" }}</p>
+                
+                {% if dfd.numero_processo %}
+                <p class="mb-1 small text-muted text-uppercase">Número do Processo</p>
+                <p class="mb-3">{{ dfd.numero_processo }}</p>
+                {% endif %}
+                
+                {% if dfd.link_publico %}
+                <a href="{{ dfd.link_publico }}" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                    <i class="bi bi-link-45deg me-1"></i>Ver no PGC/Portal
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h2 class="h6 mb-0 fw-bold">Itens Consolidados</h2>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Item</th>
+                            <th>Unidade</th>
+                            <th>Quantidade</th>
+                            <th class="text-end pe-3">Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in dfd.itens_demanda.all %}
+                        <tr>
+                            <td class="ps-3">
+                                <div class="fw-bold">{{ item.nome }}</div>
+                                <div class="small text-muted">Demanda #{{ item.demanda_id }}</div>
+                            </td>
+                            <td>{{ item.demanda.unidade }}</td>
+                            <td>{{ item.quantidade }} {{ item.unidade_medida }}</td>
+                            <td class="text-end pe-3 fw-bold">R$ {{ item.valor_total }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold">Total do DFD:</td>
+                            <td class="text-end pe-3 fw-bold text-primary">
+                                {% comment %} Aqui seria ideal um método no model ou template filter para somar {% endcomment %}
+                                R$ {{ total_dfd|default:"-" }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

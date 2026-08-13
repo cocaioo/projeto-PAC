@@ -1,0 +1,22 @@
+# Configuração do ruff para o PAC UFPI.
+# Regras enxutas e seguras para uma base de código Django existente:
+# erros reais (sintaxe, nomes indefinidos, imports não usados) em vez de
+# estilo agressivo. Amplie `select` conforme a padronização evoluir.
+
+target-version = "py311"
+line-length = 100
+
+# Arquivos gerados automaticamente não devem ser analisados.
+extend-exclude = [
+    "**/migrations/**",
+    "**/static/**",
+    "**/staticfiles/**",
+]
+
+[lint]
+select = [
+    "E4",   # imports
+    "E7",   # statements
+    "E9",   # erros de sintaxe / runtime
+    "F",    # pyflakes (nomes indefinidos, imports/variáveis não usados)
+]

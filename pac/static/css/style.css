@@ -1,0 +1,15 @@
+/* =============================================================================
+   PAC UFPI — Estilos customizados
+   Complementa o Bootstrap 5 com ajustes específicos do projeto.
+   ============================================================================= */
+
+/* Layout geral */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+}

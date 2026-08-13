@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Validar Item - PAC UFPI{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="mb-4">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'validacoes:lista_pendentes' %}">Validações</a></li>
+                    <li class="breadcrumb-item active">Análise de Item</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0 fw-bold text-primary">Análise Técnica do Item</h1>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-7">
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="h6 mb-0 fw-bold">Detalhes do Item</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-sm-4 text-muted small text-uppercase">Nome/Objeto</div>
+                            <div class="col-sm-8 fw-bold">{{ item.nome }}</div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-sm-4 text-muted small text-uppercase">Descrição</div>
+                            <div class="col-sm-8">{{ item.descricao }}</div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-sm-4 text-muted small text-uppercase">Quantidade</div>
+                            <div class="col-sm-8">{{ item.quantidade }} {{ item.unidade_medida }}</div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-sm-4 text-muted small text-uppercase">Valor Estimado</div>
+                            <div class="col-sm-8">R$ {{ item.valor_estimado }} (Total: R$ {{ item.valor_total }})</div>
+                        </div>
+                        <hr>
+                        <div class="row mb-3">
+                            <div class="col-sm-4 text-muted small text-uppercase">Justificativa</div>
+                            <div class="col-sm-8">{{ item.justificativa_necessidade }}</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-4 text-muted small text-uppercase">Orçamento</div>
+                            <div class="col-sm-8">{{ item.indicacao_orcamentaria }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-5">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="h6 mb-0 fw-bold">Decisão Administrativa</h2>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Parecer/Observação</label>
+                                <textarea name="comentario" class="form-control" rows="4" placeholder="Informe o motivo da validação ou devolução..."></textarea>
+                                <div class="form-text">Obrigatório apenas em caso de devolução.</div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" name="acao" value="validar" class="btn btn-success py-2">
+                                    <i class="bi bi-check-circle me-2"></i>Validar Item
+                                </button>
+                                <button type="submit" name="acao" value="devolver" class="btn btn-danger py-2">
+                                    <i class="bi bi-x-circle me-2"></i>Devolver para Unidade
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

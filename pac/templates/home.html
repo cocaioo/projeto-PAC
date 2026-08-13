@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Início - PAC UFPI{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 text-center py-5">
+        <h1 class="display-4 fw-bold text-primary mb-4">PAC UFPI</h1>
+        <p class="lead mb-5">Sistema de Gestão do Plano Anual de Contratações da Universidade Federal do Piauí.</p>
+
+        {% if user.is_authenticated %}
+            <div class="row g-4 justify-content-center">
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm border-0">
+                        <div class="card-body p-4">
+                            <div class="display-5 text-primary mb-3">
+                                <i class="bi bi-file-earmark-text"></i>
+                            </div>
+                            <h3 class="h5 card-title fw-bold">Minhas Demandas</h3>
+                            <p class="card-text text-muted">Cadastre e acompanhe suas solicitações de contratação.</p>
+                            <a href="{% url 'demandas:lista' %}" class="btn btn-primary stretched-link">Acessar</a>
+                        </div>
+                    </div>
+                </div>
+
+                {% if user.is_admin_user %}
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm border-0">
+                        <div class="card-body p-4">
+                            <div class="display-5 text-success mb-3">
+                                <i class="bi bi-check2-square"></i>
+                            </div>
+                            <h3 class="h5 card-title fw-bold">Validações</h3>
+                            <p class="card-text text-muted">Valide ou devolva itens de demanda pendentes.</p>
+                            <a href="{% url 'validacoes:lista_pendentes' %}" class="btn btn-success stretched-link">Gerenciar</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm border-0">
+                        <div class="card-body p-4">
+                            <div class="display-5 text-info mb-3">
+                                <i class="bi bi-file-earmark-ruled"></i>
+                            </div>
+                            <h3 class="h5 card-title fw-bold">DFDs</h3>
+                            <p class="card-text text-muted">Consolide itens validados em DFDs institucionais.</p>
+                            <a href="{% url 'dfds:lista' %}" class="btn btn-info text-white stretched-link">Visualizar</a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="card shadow-sm border-0 max-width-500 mx-auto">
+                <div class="card-body p-5">
+                    <h2 class="h4 fw-bold mb-4">Bem-vindo</h2>
+                    <p class="mb-4">Para acessar as funcionalidades do sistema, por favor realize o login com suas credenciais institucionais.</p>
+                    <a href="{% url 'login' %}" class="btn btn-primary btn-lg px-5">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>Entrar no Sistema
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

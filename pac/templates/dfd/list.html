@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}DFDs - PAC UFPI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0 fw-bold text-primary">Documentos de Formalização (DFD)</h1>
+        <p class="text-muted mb-0">Consolidação de itens validados para o PGC.</p>
+    </div>
+    <a href="{% url 'dfds:consolidar' %}" class="btn btn-primary">
+        <i class="bi bi-collection me-1"></i>Consolidar Itens
+    </a>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Número</th>
+                    <th>Grupo de Contratação</th>
+                    <th>Itens</th>
+                    <th>Criado em</th>
+                    <th class="text-end pe-4">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dfd in dfds %}
+                <tr>
+                    <td class="ps-4 fw-bold text-primary">{{ dfd.numero }}</td>
+                    <td>{{ dfd.grupo.nome }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ dfd.itens_demanda.count }} itens</span></td>
+                    <td>{{ dfd.criado_em|date:"d/m/Y" }}</td>
+                    <td class="text-end pe-4">
+                        <a href="{% url 'dfds:detalhe' dfd.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-muted">
+                        Nenhum DFD gerado ainda.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

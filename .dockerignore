@@ -1,0 +1,38 @@
+# Controle de versão e CI
+.git
+.github
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Ambiente e segredos
+.env
+.env.example
+
+# Banco de dados local e arquivos gerados
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+
+# Docker / dev
+Dockerfile
+.dockerignore
+
+# Front-end: dependências e build (reconstruídos na imagem)
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Documentação e IDEs
+docs/
+.vscode/
+.idea/
+.claude/
