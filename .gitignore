@@ -15,6 +15,9 @@ build/
 # Node.js
 node_modules/
 frontend/node_modules/
+frontend/.e2e/
+frontend/playwright-report/
+frontend/test-results/
 
 # Virtual environment
 venv/

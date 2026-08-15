@@ -1,0 +1,71 @@
+import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+export const supportDir = path.dirname(fileURLToPath(import.meta.url));
+export const frontendDir = path.resolve(supportDir, "../..");
+export const repositoryDir = path.resolve(frontendDir, "..");
+export const backendDir = path.join(repositoryDir, "pac");
+export const runtimeDir = path.join(frontendDir, ".e2e");
+export const databasePath = path.resolve(
+  process.env.PAC_E2E_DATABASE || path.join(runtimeDir, "pac-e2e.sqlite3")
+);
+const databaseRelativePath = path.relative(runtimeDir, databasePath);
+export const databaseIsInsideRuntime = Boolean(databaseRelativePath)
+  && databaseRelativePath !== ".."
+  && !databaseRelativePath.startsWith(`..${path.sep}`)
+  && !path.isAbsolute(databaseRelativePath);
+export const serverStatePath = path.join(runtimeDir, "servers.json");
+
+export function pythonExecutable() {
+  if (process.env.PAC_E2E_PYTHON) return process.env.PAC_E2E_PYTHON;
+  const candidates = process.platform === "win32"
+    ? [path.join(repositoryDir, "venv", "Scripts", "python.exe")]
+    : [path.join(repositoryDir, "venv", "bin", "python")];
+  return candidates.find(existsSync) || (process.platform === "win32" ? "python.exe" : "python3");
+}
+
+const sqliteUrlPath = databasePath.replaceAll("\\", "/");
+const frontendPort = Number(process.env.PAC_E2E_FRONTEND_PORT || 4173);
+const frontendOrigin = new URL(
+  process.env.PAC_E2E_BASE_URL || `http://127.0.0.1:${frontendPort}`
+).origin;
+export const backendEnv = {
+  ...process.env,
+  DATABASE_URL: `sqlite:///${sqliteUrlPath}`,
+  DJANGO_DEBUG: "True",
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1",
+  DJANGO_CORS_ALLOWED_ORIGINS: frontendOrigin,
+  DJANGO_CSRF_TRUSTED_ORIGINS: frontendOrigin,
+  DJANGO_SECRET_KEY: "e2e-only-secret-key-not-for-production",
+  PAC_E2E_PASSWORD: process.env.PAC_E2E_PASSWORD || "Pac-E2E-Only-2026!",
+};
+
+export function serverPythonRuntime() {
+  const selectedPython = pythonExecutable();
+  if (process.platform !== "win32" || !selectedPython.toLowerCase().includes("\\scripts\\python.exe")) {
+    return { executable: selectedPython, env: backendEnv };
+  }
+
+  const probe = spawnSync(
+    selectedPython,
+    [
+      "-c",
+      "import json,sys; print(json.dumps({'base': sys._base_executable, 'site': next(p for p in sys.path if 'site-packages' in p)}))",
+    ],
+    { encoding: "utf8", windowsHide: true }
+  );
+  if (probe.status !== 0) {
+    throw new Error("Nao foi possivel resolver o Python-base do ambiente virtual E2E.");
+  }
+  const resolved = JSON.parse(probe.stdout.trim());
+  return {
+    executable: resolved.base,
+    env: {
+      ...backendEnv,
+      VIRTUAL_ENV: path.resolve(path.dirname(selectedPython), ".."),
+      PYTHONPATH: [resolved.site, backendEnv.PYTHONPATH].filter(Boolean).join(path.delimiter),
+    },
+  };
+}
