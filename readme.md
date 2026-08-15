@@ -65,6 +65,18 @@ npm test
 
 Depois de iniciar os dois servidores, acesse o front-end, faça login e use os módulos principais para cadastrar demandas, revisar itens do catálogo, validar ou devolver solicitações e acompanhar os indicadores no dashboard. Se quiser, inclua aqui capturas de tela dos fluxos mais importantes.
 
+## Dados de homologação
+
+O comando `seed_homologacao` prepara uma massa determinística com unidades, grupos, itens de catálogo e perfis de usuário, ADMIN e ADMIN_MASTER. A senha não possui valor padrão e deve ser fornecida exclusivamente pela variável de ambiente `HOMOLOGACAO_TEST_PASSWORD`.
+
+```bash
+cd pac
+python manage.py migrate
+python manage.py seed_homologacao
+```
+
+O comando pode ser executado novamente para restaurar os registros controlados de demonstração sem duplicá-los. Não grave a senha no repositório, no roteiro ou em capturas de tela; configure-a pelo gerenciador de segredos do ambiente. O passo a passo completo de validação está em [docs/roteiro_homologacao.md](docs/roteiro_homologacao.md).
+
 ## Como contribuir
 
 1. Faça um fork do projeto.
