@@ -117,5 +117,22 @@ jobs:
       - name: Executar testes (Vitest)
         run: npm test
 
+      - name: Executar testes de desempenho do front-end
+        run: npm run test:performance
+
       - name: Gerar build de produção
         run: npm run build
+
+      - name: Auditar páginas principais com Lighthouse CI
+        run: npm run lighthouse
+
+      - name: Publicar relatórios do Lighthouse
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: |
+            frontend/lighthouse-reports
+            frontend/.lighthouseci
+          if-no-files-found: ignore
+          retention-days: 7

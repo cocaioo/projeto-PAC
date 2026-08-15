@@ -26,7 +26,7 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: "./vitest.setup.js",
-    exclude: [...configDefaults.exclude, "e2e/**"],
+    exclude: [...configDefaults.exclude, "e2e/**", "src/performance/**"],
     css: false,
     coverage: {
       provider: "v8",
