@@ -41,7 +41,7 @@ export default function AppRoutes() {
 
         {/* Validações (staff) */}
         <Route path="validacoes" element={staff(<ValidacoesList />)} />
-        <Route path="validacoes/:itemId" element={staff(<ValidacaoDecisao />)} />
+        <Route path="validacoes/:demandaId" element={staff(<ValidacaoDecisao />)} />
 
         {/* DFDs (staff) */}
         <Route path="dfds" element={staff(<DfdList />)} />

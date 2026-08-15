@@ -183,7 +183,9 @@ class ValidacaoTests(APITestCase):
     def setUp(self):
         self.unidade = criar_unidade()
         self.user = criar_usuario(unidade=self.unidade)
-        self.admin = criar_usuario(username="admin", is_staff=True, perfil="admin")
+        self.admin = criar_usuario(
+            username="admin", is_staff=True, perfil="admin_master"
+        )
         self.demanda = Demanda.objects.create(
             unidade=self.unidade, usuario=self.user, ano_referencia=2027,
             status=StatusDemanda.AGUARDANDO_VALIDACAO
@@ -262,7 +264,9 @@ class DFDTests(APITestCase):
     def setUp(self):
         self.unidade = criar_unidade()
         self.user = criar_usuario(unidade=self.unidade)
-        self.admin = criar_usuario(username="admin", is_staff=True, perfil="admin")
+        self.admin = criar_usuario(
+            username="admin", is_staff=True, perfil="admin_master"
+        )
         self.grupo = GrupoContratacao.objects.create(
             nome="TIC", unidade_admin=self.unidade
         )

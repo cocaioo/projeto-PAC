@@ -47,6 +47,7 @@ from .serializers import (
     UsuarioSerializer,
     ValidacaoSerializer,
 )
+from .validation_serializers import ItemPendenteValidacaoSerializer
 
 
 def erro_dominio_response(exc: ErroDominio):
@@ -593,12 +594,99 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ValidacaoSerializer
     permission_classes = [IsAuthenticated, IsAdminUserPermission]
 
+    @staticmethod
+    def _itens_no_escopo_do_usuario(queryset, user):
+        """Restringe ADMIN ao grupo administrado pela sua unidade.
+
+        Itens manuais nao possuem grupo que permita determinar o responsavel.
+        Por seguranca, eles ficam disponiveis somente para ADMIN MASTER.
+        """
+        if user.is_admin_master_user:
+            return queryset
+        if not user.unidade_id:
+            return queryset.none()
+        return queryset.filter(
+            item_catalogo__isnull=False,
+            item_catalogo__grupo__unidade_admin_id=user.unidade_id,
+        )
+
+    @staticmethod
+    def _usuario_pode_decidir_item(user, item):
+        if user.is_admin_master_user:
+            return True
+        return bool(
+            user.unidade_id
+            and item.item_catalogo_id
+            and item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
+        )
+
+    @staticmethod
+    def _filtro_id(request, nome, *aliases):
+        valor = request.query_params.get(nome)
+        if valor in (None, ""):
+            for alias in aliases:
+                valor = request.query_params.get(alias)
+                if valor not in (None, ""):
+                    break
+        if valor in (None, ""):
+            return None, None
+        try:
+            valor = int(valor)
+        except (TypeError, ValueError):
+            valor = 0
+        if valor <= 0:
+            return None, Response(
+                {nome: ["Informe um identificador inteiro positivo."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return valor, None
+
     @action(detail=False, methods=["get"])
     def pendentes(self, request):
-        itens = ItemDemanda.objects.filter(
-            status=StatusItemDemanda.AGUARDANDO_VALIDACAO
-        ).select_related("demanda", "demanda__unidade", "demanda__usuario")
-        return Response(ItemDemandaSerializer(itens, many=True).data)
+        from django.db.models import Prefetch
+
+        unidade_id, erro = self._filtro_id(request, "unidade", "unidade_id")
+        if erro:
+            return erro
+        grupo_id, erro = self._filtro_id(
+            request, "grupo", "grupo_id", "grupo_contratacao_id"
+        )
+        if erro:
+            return erro
+
+        ultima_devolucao_prefetch = Prefetch(
+            "validacoes",
+            queryset=Validacao.objects.filter(acao=TipoAcao.DEVOLVIDO)
+            .select_related("usuario")
+            .order_by("-criado_em", "-id"),
+            to_attr="devolucoes_prefetched",
+        )
+        itens = (
+            ItemDemanda.objects.filter(
+                status=StatusItemDemanda.AGUARDANDO_VALIDACAO
+            )
+            .select_related(
+                "demanda",
+                "demanda__unidade",
+                "demanda__usuario",
+                "item_catalogo",
+                "item_catalogo__grupo",
+                "item_catalogo__grupo__unidade_admin",
+            )
+            .prefetch_related(ultima_devolucao_prefetch)
+        )
+        itens = self._itens_no_escopo_do_usuario(itens, request.user)
+        if unidade_id is not None:
+            itens = itens.filter(demanda__unidade_id=unidade_id)
+        if grupo_id is not None:
+            itens = itens.filter(item_catalogo__grupo_id=grupo_id)
+        itens = itens.order_by("-demanda__enviada_em", "demanda_id", "id")
+
+        return Response(
+            ItemPendenteValidacaoSerializer(
+                itens, many=True, context={"request": request}
+            ).data
+        )
 
     @action(detail=False, methods=["post"])
     def decidir(self, request):
@@ -606,12 +694,44 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
         acao = request.data.get("acao")
         comentario = request.data.get("comentario", "")
 
+        try:
+            item_id = int(item_id)
+        except (TypeError, ValueError):
+            item_id = 0
+        if item_id <= 0:
+            return Response(
+                {"item_demanda": ["Informe um identificador inteiro positivo."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if comentario is None:
+            comentario = ""
+        if not isinstance(comentario, str):
+            return Response(
+                {"comentario": ["Informe um texto valido."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        comentario = comentario.strip()
+
         with transaction.atomic():
+            # Nao usa select_related no lock porque item_catalogo e anulavel;
+            # no PostgreSQL, FOR UPDATE sobre o lado anulavel de um OUTER JOIN
+            # e rejeitado. As relacoes de escopo sao carregadas sob a transacao.
             item = ItemDemanda.objects.select_for_update().filter(pk=item_id).first()
             if item is None:
                 return Response(
                     {"detail": "Item não encontrado."},
                     status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if not self._usuario_pode_decidir_item(request.user, item):
+                return Response(
+                    {
+                        "detail": (
+                            "Voce nao tem permissao para validar itens deste "
+                            "grupo de contratacao."
+                        )
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
