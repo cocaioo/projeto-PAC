@@ -168,7 +168,11 @@ export const api = {
 
   listDfds: (query) => request("/dfds/", { query }),
   getDfd: (id) => request(`/dfds/${id}/`),
-  itensDisponiveis: (query) => request("/dfds/disponiveis/", { query }),
+  listConsolidationCycles: (options) => request("/consolidacoes/ciclos/", options),
+  listEligibleConsolidationItems: (query, options) => request(
+    "/consolidacoes/itens-elegiveis/",
+    { query, ...options }
+  ),
   consolidarDfd: (body) => request("/dfds/consolidar/", { method: "POST", body }),
 
   dashboardStats: () => request("/dashboard/stats/"),

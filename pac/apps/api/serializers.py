@@ -362,3 +362,9 @@ class ConsolidarDFDSerializer(serializers.Serializer):
         if len(value) != len(set(value)):
             raise serializers.ValidationError("A lista contem IDs duplicados.")
         return value
+
+
+class ItensElegiveisQuerySerializer(serializers.Serializer):
+    ciclo_pac_id = serializers.IntegerField(min_value=1, required=False)
+    item_catalogo_id = serializers.IntegerField(min_value=1, required=False)
+    grupo_contratacao_id = serializers.IntegerField(min_value=1, required=False)

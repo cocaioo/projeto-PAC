@@ -28,7 +28,11 @@ from apps.demandas.services import (
     sincronizar_status_macro_demanda,
 )
 from apps.dfd.models import DFD
-from apps.dfd.selectors import agrupar_itens_elegiveis, listar_itens_elegiveis
+from apps.dfd.selectors import (
+    agrupar_itens_elegiveis,
+    listar_ciclos_elegiveis,
+    listar_itens_elegiveis,
+)
 from apps.dfd.services import ConflitoConsolidacao, consolidar_itens_em_dfd
 from apps.grupos_contratacao.models import GrupoContratacao
 from apps.unidades.models import Unidade
@@ -43,6 +47,7 @@ from .serializers import (
     ItemCatalogoSerializer,
     ItemDemandaCorrecaoSerializer,
     ItemDemandaSerializer,
+    ItensElegiveisQuerySerializer,
     UnidadeSerializer,
     UsuarioSerializer,
     ValidacaoSerializer,
@@ -784,13 +789,32 @@ class ItensElegiveisConsolidacaoView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUserPermission]
 
     def get(self, request):
+        parametros = request.query_params.copy()
+        if not parametros.get("grupo_contratacao_id") and parametros.get("grupo_id"):
+            parametros["grupo_contratacao_id"] = parametros["grupo_id"]
+        serializer = ItensElegiveisQuerySerializer(data=parametros)
+        serializer.is_valid(raise_exception=True)
         queryset = listar_itens_elegiveis(
             usuario=request.user,
-            ciclo_pac_id=request.query_params.get("ciclo_pac_id"),
-            item_catalogo_id=request.query_params.get("item_catalogo_id"),
-            grupo_contratacao_id=request.query_params.get("grupo_contratacao_id"),
+            **serializer.validated_data,
         )
         return Response(agrupar_itens_elegiveis(queryset))
+
+
+class CiclosElegiveisConsolidacaoView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUserPermission]
+
+    def get(self, request):
+        ciclos = listar_ciclos_elegiveis(usuario=request.user)
+        return Response([
+            {
+                "id": ciclo["demanda__ciclo_pac_id"],
+                "ano": ciclo["demanda__ciclo_pac__ano"],
+                "ativo": ciclo["demanda__ciclo_pac__ativo"],
+                "total_itens_elegiveis": ciclo["total_itens_elegiveis"],
+            }
+            for ciclo in ciclos
+        ])
 
 
 class ConsolidarDFDView(APIView):
@@ -812,20 +836,68 @@ class ConsolidarDFDView(APIView):
             )
         dfd = resultado["dfd"]
         return Response({
-            "dfd": {"id": dfd.id, "numero": dfd.numero},
+            "dfd": {
+                "id": dfd.id,
+                "numero": dfd.numero,
+                "ciclo_pac": {
+                    "id": dfd.ciclo_pac_id,
+                    "ano": dfd.ciclo_pac.ano,
+                },
+                "grupo_contratacao": {
+                    "id": dfd.grupo_id,
+                    "nome": dfd.grupo.nome,
+                },
+            },
             "itens_vinculados": len(resultado["itens"]),
+            "item_ids": [item.id for item in resultado["itens"]],
             "demandas_afetadas": resultado["demandas_afetadas"],
         }, status=status.HTTP_201_CREATED if resultado["criado"] else status.HTTP_200_OK)
 
     def _post_legado(self, request):
-        numero, grupo_id = request.data.get("numero"), request.data.get("grupo")
-        item_ids = list(dict.fromkeys(request.data.get("itens") or []))
-        if not numero or not grupo_id or not item_ids:
+        numero = request.data.get("numero")
+        raw_item_ids = request.data.get("itens") or []
+        try:
+            grupo_id = int(request.data.get("grupo"))
+            item_ids = list(dict.fromkeys(int(item_id) for item_id in raw_item_ids))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Grupo e itens devem possuir identificadores inteiros."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(numero, str) or not numero.strip() or not grupo_id or not item_ids:
             return Response({"detail": "Informe numero, grupo e ao menos um item."}, status=status.HTTP_400_BAD_REQUEST)
+        numero = numero.strip()
+        grupo = GrupoContratacao.objects.filter(pk=grupo_id).first()
+        if grupo is None:
+            return Response(
+                {"detail": "Grupo de contratacao nao encontrado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            not request.user.is_admin_master_user
+            and request.user.unidade_id != grupo.unidade_admin_id
+        ):
+            return Response(
+                {"detail": "Voce nao tem permissao para consolidar itens deste grupo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         with transaction.atomic():
-            itens = list(ItemDemanda.objects.select_for_update().filter(id__in=item_ids))
+            itens = list(
+                ItemDemanda.objects.select_for_update()
+                .select_related("item_catalogo", "item_catalogo__grupo", "demanda__ciclo_pac")
+                .filter(id__in=item_ids)
+            )
             if len(itens) != len(item_ids):
                 return Response({"detail": "Um ou mais itens nao foram encontrados."}, status=status.HTTP_400_BAD_REQUEST)
+            if any(
+                item.item_catalogo_id
+                and item.item_catalogo.grupo_id != grupo_id
+                for item in itens
+            ):
+                return Response(
+                    {"detail": "Todos os itens catalogados devem pertencer ao grupo informado."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             demandas = list(Demanda.objects.select_for_update().filter(id__in={item.demanda_id for item in itens}).order_by("id"))
             if any(d.status in [StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA] for d in demandas):
                 return Response({"detail": "Solicitacao encerrada ou cancelada."}, status=status.HTTP_409_CONFLICT)
@@ -834,7 +906,18 @@ class ConsolidarDFDView(APIView):
             ciclo_ids = {item.demanda.ciclo_pac_id for item in itens}
             if len(ciclo_ids) != 1:
                 return Response({"detail": "Itens de ciclos diferentes."}, status=status.HTTP_400_BAD_REQUEST)
-            dfd = DFD.objects.create(numero=numero, grupo_id=grupo_id, ciclo_pac_id=ciclo_ids.pop(), criado_por=request.user)
+            ciclo_id = ciclo_ids.pop()
+            if not itens[0].demanda.ciclo_pac.ativo:
+                return Response(
+                    {"detail": "Nao e permitido consolidar itens de um ciclo inativo."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if DFD.objects.filter(numero=numero, ciclo_pac_id=ciclo_id).exists():
+                return Response(
+                    {"detail": "Ja existe um DFD com este numero no ciclo informado."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            dfd = DFD.objects.create(numero=numero, grupo=grupo, ciclo_pac_id=ciclo_id, criado_por=request.user)
             for item in itens:
                 item.dfd = dfd
                 item.status = StatusItemDemanda.VINCULADA_DFD
@@ -853,13 +936,35 @@ class DFDViewSet(viewsets.ModelViewSet):
     serializer_class = DFDSerializer
     permission_classes = [IsAuthenticated, IsAdminUserPermission]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.user.is_admin_master_user:
+            return queryset
+        if not self.request.user.unidade_id:
+            return queryset.none()
+        return queryset.filter(
+            grupo__unidade_admin_id=self.request.user.unidade_id
+        )
+
     @action(detail=False, methods=["get"])
     def disponiveis(self, request):
         itens = (
-            ItemDemanda.objects.filter(status=StatusItemDemanda.VALIDADA)
-            .exclude(dfds__isnull=False)
-            .select_related("demanda", "demanda__unidade")
+            ItemDemanda.objects.filter(
+                status=StatusItemDemanda.VALIDADA,
+                dfd__isnull=True,
+            )
+            .select_related(
+                "demanda",
+                "demanda__unidade",
+                "item_catalogo",
+                "item_catalogo__grupo",
+            )
         )
+        if not request.user.is_admin_master_user:
+            itens = itens.filter(
+                item_catalogo__isnull=False,
+                item_catalogo__grupo__unidade_admin_id=request.user.unidade_id,
+            )
         return Response(ItemDemandaSerializer(itens, many=True).data)
 
     @action(detail=False, methods=["post"])

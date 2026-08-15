@@ -27,6 +27,7 @@ urlpatterns = [
 
     # Dashboard.
     path("dashboard/stats/", views.DashboardStatsView.as_view(), name="dashboard-stats"),
+    path("consolidacoes/ciclos/", views.CiclosElegiveisConsolidacaoView.as_view(), name="ciclos-elegiveis"),
     path("consolidacoes/itens-elegiveis/", views.ItensElegiveisConsolidacaoView.as_view(), name="itens-elegiveis"),
     path("dfds/consolidar/", views.ConsolidarDFDView.as_view(), name="dfd-consolidar"),
 

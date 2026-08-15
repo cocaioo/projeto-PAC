@@ -4,7 +4,13 @@ from django.db import transaction
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.auditoria.models import LogAuditoria
-from apps.demandas.models import Demanda, ItemDemanda, StatusDemanda, StatusItemDemanda
+from apps.demandas.models import (
+    CicloPAC,
+    Demanda,
+    ItemDemanda,
+    StatusDemanda,
+    StatusItemDemanda,
+)
 from apps.demandas.services import sincronizar_status_macro_demanda
 from .models import DFD
 
@@ -26,6 +32,11 @@ def _pode_administrar_grupo(usuario, grupo):
 def consolidar_itens_em_dfd(*, usuario, numero_dfd, item_ids, ciclo_pac_id):
     if not getattr(usuario, "is_admin_user", False):
         raise PermissionDenied("O usu\u00e1rio n\u00e3o possui permiss\u00e3o para consolidar itens.")
+    ciclo = CicloPAC.objects.filter(pk=ciclo_pac_id).first()
+    if ciclo is None:
+        raise ValidationError({"ciclo_pac_id": "Ciclo PAC inexistente."})
+    if not ciclo.ativo:
+        raise ValidationError({"ciclo_pac_id": "O ciclo PAC informado est\u00e1 inativo."})
     ids = set(item_ids)
     itens = list(ItemDemanda.objects.select_for_update().select_related(
         "demanda", "demanda__ciclo_pac", "item_catalogo__grupo"
@@ -37,10 +48,19 @@ def consolidar_itens_em_dfd(*, usuario, numero_dfd, item_ids, ciclo_pac_id):
     invalidos = []
     grupos = set()
     for item in itens:
-        if (item.status != StatusItemDemanda.VALIDADA or item.dfd_id or
-                item.demanda.ciclo_pac_id != ciclo_pac_id or
-                item.demanda.status in (StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA) or
-                not _pode_administrar_grupo(usuario, item.item_catalogo.grupo)):
+        # Item manual n\u00e3o possui grupo de contrata\u00e7\u00e3o verific\u00e1vel e,
+        # portanto, n\u00e3o participa do contrato novo de consolida\u00e7\u00e3o.
+        if item.item_catalogo_id is None:
+            invalidos.append(item.id)
+            continue
+        if (
+            item.status != StatusItemDemanda.VALIDADA
+            or item.dfd_id
+            or item.demanda.ciclo_pac_id != ciclo_pac_id
+            or item.demanda.status
+            in (StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA)
+            or not _pode_administrar_grupo(usuario, item.item_catalogo.grupo)
+        ):
             invalidos.append(item.id)
         grupos.add(item.item_catalogo.grupo_id)
     if invalidos:
