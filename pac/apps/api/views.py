@@ -253,7 +253,10 @@ class DemandaViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             demanda_locked = Demanda.objects.select_for_update().get(pk=demanda.pk)
-            serializer = ItemDemandaSerializer(data=request.data)
+            serializer = ItemDemandaSerializer(
+                data=request.data,
+                context={**self.get_serializer_context(), "demanda": demanda_locked},
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save(demanda=demanda_locked)
             sincronizar_status_macro_demanda(demanda_locked)

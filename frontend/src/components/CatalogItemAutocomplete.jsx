@@ -11,8 +11,10 @@ export default function CatalogItemAutocomplete({
   excludedIds = EMPTY_IDS,
   error,
   disabled = false,
+  id,
 }) {
-  const inputId = useId();
+  const generatedId = useId();
+  const inputId = id || generatedId;
   const listboxId = `${inputId}-results`;
   const requestId = useRef(0);
   const [query, setQuery] = useState(selectedItem?.nome || "");

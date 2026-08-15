@@ -205,7 +205,8 @@ class ItemDemanda(models.Model):
     )
 
     justificativa_prioridade = models.TextField(
-        verbose_name="Justificativa da Prioridade"
+        verbose_name="Justificativa da Prioridade",
+        blank=True
     )
 
     justificativa_necessidade = models.TextField(
@@ -227,8 +228,8 @@ class ItemDemanda(models.Model):
     status = models.CharField(
         verbose_name="Status",
         max_length=30,
-        choices=StatusDemanda.choices,
-        default=StatusDemanda.RASCUNHO
+        choices=StatusItemDemanda.choices,
+        default=StatusItemDemanda.RASCUNHO
     )
 
     criado_em = models.DateTimeField(
@@ -243,6 +244,12 @@ class ItemDemanda(models.Model):
         verbose_name = "Item de Demanda"
         verbose_name_plural = "Itens de Demanda"
         ordering = ["-criado_em"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["demanda", "item_catalogo"],
+                name="uniq_item_catalogo_demanda",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.nome} (Demanda #{self.demanda_id})"

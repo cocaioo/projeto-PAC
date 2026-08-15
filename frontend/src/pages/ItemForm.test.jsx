@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../test-utils";
-import ItemForm from "./ItemForm";
+import ItemForm, { validateItemForm } from "./ItemForm";
 import { api } from "../api/client";
 
 vi.mock("../api/client", () => ({
@@ -12,6 +12,7 @@ vi.mock("../api/client", () => ({
     updateItem: vi.fn(),
     reenviarItem: vi.fn(),
     listCatalogo: vi.fn(),
+    getDemanda: vi.fn(),
   },
 }));
 
@@ -31,6 +32,77 @@ async function preencherObrigatorios() {
 describe("ItemForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    api.getDemanda.mockResolvedValue({ itens: [] });
+  });
+
+  it("exige justificativa somente para prioridade alta", () => {
+    const validBase = {
+      item_catalogo: null,
+      nome: "Item",
+      descricao: "Descrição",
+      unidade_medida: "un",
+      quantidade: 1,
+      valor_estimado: 10,
+      data_prevista: "2027-01-01",
+      indicacao_orcamentaria: "Fonte",
+      justificativa_necessidade: "Necessidade",
+      justificativa_prioridade: "",
+    };
+    expect(validateItemForm({ ...validBase, prioridade: "alta" }))
+      .toHaveProperty("justificativa_prioridade");
+    expect(validateItemForm({ ...validBase, prioridade: "media" }))
+      .not.toHaveProperty("justificativa_prioridade");
+    expect(validateItemForm({ ...validBase, prioridade: "baixa" }))
+      .not.toHaveProperty("justificativa_prioridade");
+  });
+
+  it("não envia formulário inválido e associa erro ao input", async () => {
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+    });
+    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    expect(api.addItem).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^nome$/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText(/informe o nome do item/i)).toHaveAttribute("role", "alert");
+  });
+
+  it("bloqueia item de catálogo duplicado na demanda", async () => {
+    api.getDemanda.mockResolvedValue({ itens: [{ id: 20, item_catalogo: 5 }] });
+    api.listCatalogo.mockResolvedValue({ results: [{
+      id: 5,
+      tipo: "material",
+      nome: "Notebook institucional",
+      descricao: "Configuração homologada",
+      unidade_medida: "unidade",
+      valor_estimado: "4200.50",
+      grupo_nome: "TIC",
+    }] });
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+    });
+    await waitFor(() => expect(api.getDemanda).toHaveBeenCalledWith("7"));
+    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+    expect(screen.getByText(/já foi adicionado à demanda/i)).toBeInTheDocument();
+    expect(api.addItem).not.toHaveBeenCalled();
+  });
+
+  it("mostra erro estruturado do backend no campo correto", async () => {
+    api.addItem.mockRejectedValue({
+      message: "Revise os dados informados.",
+      fieldErrors: { quantidade: ["Quantidade indisponível para este ciclo."] },
+    });
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+    });
+    await preencherObrigatorios();
+    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    expect(await screen.findByText(/quantidade indisponível/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/quantidade/i)).toHaveAttribute("aria-describedby", "quantidade-error");
   });
 
   it("seleciona item do catálogo, preenche dados e calcula o total visual", async () => {

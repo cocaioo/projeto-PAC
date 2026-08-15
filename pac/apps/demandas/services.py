@@ -3,7 +3,13 @@ from enum import StrEnum
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from apps.demandas.models import Demanda, ItemDemanda, StatusDemanda, StatusItemDemanda
+from apps.demandas.models import (
+    Demanda,
+    ItemDemanda,
+    Prioridade,
+    StatusDemanda,
+    StatusItemDemanda,
+)
 
 
 class ErroDominio(Exception):
@@ -158,6 +164,13 @@ def validar_item_para_envio(item) -> dict:
         errors["data_prevista"] = ["A data prevista e obrigatoria."]
     if not item.justificativa_necessidade or not item.justificativa_necessidade.strip():
         errors["justificativa_necessidade"] = ["A justificativa da necessidade e obrigatoria."]
+    if (
+        item.prioridade == Prioridade.ALTA
+        and not (item.justificativa_prioridade or "").strip()
+    ):
+        errors["justificativa_prioridade"] = [
+            "Informe a justificativa para prioridade alta."
+        ]
 
     if errors:
         raise ValidationError(errors)

@@ -40,6 +40,30 @@ function formFromItem(data) {
   };
 }
 
+export function validateItemForm(form, { origem = "manual", catalogIds = [] } = {}) {
+  const errors = {};
+  if (origem === "catalogo" && !form.item_catalogo) {
+    errors.item_catalogo = "Selecione um item do catálogo.";
+  }
+  if (form.item_catalogo && catalogIds.includes(Number(form.item_catalogo))) {
+    errors.item_catalogo = "Este item do catálogo já foi adicionado à demanda.";
+  }
+  if (origem === "manual") {
+    if (!form.nome.trim()) errors.nome = "Informe o nome do item.";
+    if (!form.descricao.trim()) errors.descricao = "Informe a descrição do item.";
+    if (!form.unidade_medida.trim()) errors.unidade_medida = "Informe a unidade de medida.";
+  }
+  if (!form.quantidade || Number(form.quantidade) <= 0) errors.quantidade = "A quantidade deve ser maior que zero.";
+  if (!form.valor_estimado || Number(form.valor_estimado) <= 0) errors.valor_estimado = "O valor estimado deve ser maior que zero.";
+  if (!form.data_prevista) errors.data_prevista = "Informe a data prevista.";
+  if (!form.indicacao_orcamentaria.trim()) errors.indicacao_orcamentaria = "Informe a indicação orçamentária.";
+  if (!form.justificativa_necessidade.trim()) errors.justificativa_necessidade = "Informe a justificativa da necessidade.";
+  if (form.prioridade === "alta" && !form.justificativa_prioridade.trim()) {
+    errors.justificativa_prioridade = "A justificativa é obrigatória para prioridade alta.";
+  }
+  return errors;
+}
+
 export default function ItemForm() {
   const { id, itemId } = useParams();
   const isEditing = Boolean(itemId);
@@ -47,6 +71,8 @@ export default function ItemForm() {
   const [form, setForm] = useState(CAMPOS_INICIAIS);
   const [origem, setOrigem] = useState("manual");
   const [itemCatalogo, setItemCatalogo] = useState(null);
+  const [catalogIdsExistentes, setCatalogIdsExistentes] = useState([]);
+  const [errosCampos, setErrosCampos] = useState({});
   const [itemAtual, setItemAtual] = useState(null);
   const [erro, setErro] = useState("");
   const [mensagem, setMensagem] = useState("");
@@ -82,8 +108,23 @@ export default function ItemForm() {
       .finally(() => setCarregandoItem(false));
   }, [id, itemId, isEditing]);
 
+  useEffect(() => {
+    if (isEditing || typeof api.getDemanda !== "function") return;
+    let mounted = true;
+    api.getDemanda(id)
+      .then((demanda) => {
+        if (!mounted) return;
+        setCatalogIdsExistentes(
+          (demanda.itens || []).map((item) => Number(item.item_catalogo)).filter(Boolean)
+        );
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [id, isEditing]);
+
   function atualizar(campo, valor) {
     setForm((atual) => ({ ...atual, [campo]: valor }));
+    setErrosCampos((atuais) => ({ ...atuais, [campo]: undefined }));
     setIsDirty(true);
   }
 
@@ -99,9 +140,17 @@ export default function ItemForm() {
         : {}),
     }));
     setIsDirty(true);
+    setErrosCampos({});
   }
 
   function selecionarItemCatalogo(item) {
+    if (item && catalogIdsExistentes.includes(Number(item.id))) {
+      setErrosCampos((atuais) => ({
+        ...atuais,
+        item_catalogo: "Este item do catálogo já foi adicionado à demanda.",
+      }));
+      return;
+    }
     setItemCatalogo(item);
     setForm((atual) => item ? ({
       ...atual,
@@ -122,12 +171,23 @@ export default function ItemForm() {
       valor_estimado: "",
     }));
     setIsDirty(true);
+    setErrosCampos((atuais) => ({ ...atuais, item_catalogo: undefined }));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setErro("");
     setMensagem("");
+    const validationErrors = validateItemForm(form, {
+      origem,
+      catalogIds: isEditing ? [] : catalogIdsExistentes,
+    });
+    if (Object.keys(validationErrors).length > 0) {
+      setErrosCampos(validationErrors);
+      document.getElementById(Object.keys(validationErrors)[0])?.focus();
+      return;
+    }
+    setErrosCampos({});
     setEnviando(true);
     const payload = {
       ...form,
@@ -151,6 +211,11 @@ export default function ItemForm() {
         navigate(`/demandas/${id}`);
       }
     } catch (err) {
+      if (err.fieldErrors) {
+        setErrosCampos(Object.fromEntries(
+          Object.entries(err.fieldErrors).map(([field, messages]) => [field, messages.join(" ")])
+        ));
+      }
       setErro(err.message || "Não foi possível salvar o item.");
     } finally {
       setEnviando(false);
@@ -175,6 +240,18 @@ export default function ItemForm() {
     } finally {
       setReenviando(false);
     }
+  }
+
+  function errorProps(field) {
+    return errosCampos[field]
+      ? { "aria-invalid": "true", "aria-describedby": `${field}-error` }
+      : {};
+  }
+
+  function fieldError(field) {
+    return errosCampos[field]
+      ? <div id={`${field}-error`} className="invalid-feedback d-block" role="alert">{errosCampos[field]}</div>
+      : null;
   }
 
   if (carregandoItem) {
@@ -212,7 +289,7 @@ export default function ItemForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {!isEditing && (
             <fieldset className="mb-3">
               <legend className="form-label fw-semibold">Origem do item</legend>
@@ -245,8 +322,10 @@ export default function ItemForm() {
 
           {origem === "catalogo" && !isEditing && (
             <CatalogItemAutocomplete
+              id="item_catalogo"
               selectedItem={itemCatalogo}
               onSelect={selecionarItemCatalogo}
+              error={errosCampos.item_catalogo}
             />
           )}
 
@@ -267,27 +346,33 @@ export default function ItemForm() {
             </div>
             <div className="col-md-8">
               <label htmlFor="nome" className="form-label">Nome</label>
-              <input id="nome" className="form-control" value={form.nome} onChange={(e) => atualizar("nome", e.target.value)} required disabled={camposCatalogoBloqueados} />
+              <input id="nome" className="form-control" value={form.nome} onChange={(e) => atualizar("nome", e.target.value)} required disabled={camposCatalogoBloqueados} {...errorProps("nome")} />
+              {fieldError("nome")}
             </div>
             <div className="col-12">
               <label htmlFor="descricao" className="form-label">Descrição</label>
-              <textarea id="descricao" className="form-control" rows={2} value={form.descricao} onChange={(e) => atualizar("descricao", e.target.value)} required disabled={camposCatalogoBloqueados} />
+              <textarea id="descricao" className="form-control" rows={2} value={form.descricao} onChange={(e) => atualizar("descricao", e.target.value)} required disabled={camposCatalogoBloqueados} {...errorProps("descricao")} />
+              {fieldError("descricao")}
             </div>
             <div className="col-md-4">
               <label htmlFor="unidade_medida" className="form-label">Unidade de medida</label>
-              <input id="unidade_medida" className="form-control" value={form.unidade_medida} onChange={(e) => atualizar("unidade_medida", e.target.value)} required disabled={camposCatalogoBloqueados} />
+              <input id="unidade_medida" className="form-control" value={form.unidade_medida} onChange={(e) => atualizar("unidade_medida", e.target.value)} required disabled={camposCatalogoBloqueados} {...errorProps("unidade_medida")} />
+              {fieldError("unidade_medida")}
             </div>
             <div className="col-md-4">
               <label htmlFor="quantidade" className="form-label">Quantidade</label>
-              <input id="quantidade" type="number" min="0" className="form-control" value={form.quantidade} onChange={(e) => atualizar("quantidade", e.target.value)} required />
+              <input id="quantidade" type="number" min="1" className="form-control" value={form.quantidade} onChange={(e) => atualizar("quantidade", e.target.value)} required {...errorProps("quantidade")} />
+              {fieldError("quantidade")}
             </div>
             <div className="col-md-4">
               <label htmlFor="valor_estimado" className="form-label">Valor estimado unitário</label>
-              <input id="valor_estimado" type="number" step="0.01" className="form-control" value={form.valor_estimado} onChange={(e) => atualizar("valor_estimado", e.target.value)} required />
+              <input id="valor_estimado" type="number" min="0.01" step="0.01" className="form-control" value={form.valor_estimado} onChange={(e) => atualizar("valor_estimado", e.target.value)} required {...errorProps("valor_estimado")} />
+              {fieldError("valor_estimado")}
             </div>
             <div className="col-md-4">
               <label htmlFor="data_prevista" className="form-label">Data prevista</label>
-              <input id="data_prevista" type="date" className="form-control" value={form.data_prevista} onChange={(e) => atualizar("data_prevista", e.target.value)} required />
+              <input id="data_prevista" type="date" className="form-control" value={form.data_prevista} onChange={(e) => atualizar("data_prevista", e.target.value)} required {...errorProps("data_prevista")} />
+              {fieldError("data_prevista")}
             </div>
             <div className="col-md-4">
               <label htmlFor="prioridade" className="form-label">Prioridade</label>
@@ -300,15 +385,19 @@ export default function ItemForm() {
             </div>
             <div className="col-md-4">
               <label htmlFor="indicacao_orcamentaria" className="form-label">Indicação orçamentária</label>
-              <input id="indicacao_orcamentaria" className="form-control" value={form.indicacao_orcamentaria} onChange={(e) => atualizar("indicacao_orcamentaria", e.target.value)} required />
+              <input id="indicacao_orcamentaria" className="form-control" value={form.indicacao_orcamentaria} onChange={(e) => atualizar("indicacao_orcamentaria", e.target.value)} required {...errorProps("indicacao_orcamentaria")} />
+              {fieldError("indicacao_orcamentaria")}
             </div>
             <div className="col-md-6">
               <label htmlFor="justificativa_prioridade" className="form-label">Justificativa da prioridade</label>
-              <textarea id="justificativa_prioridade" className="form-control" rows={2} value={form.justificativa_prioridade} onChange={(e) => atualizar("justificativa_prioridade", e.target.value)} required />
+              <textarea id="justificativa_prioridade" className="form-control" rows={2} value={form.justificativa_prioridade} onChange={(e) => atualizar("justificativa_prioridade", e.target.value)} required={form.prioridade === "alta"} aria-required={form.prioridade === "alta"} {...errorProps("justificativa_prioridade")} />
+              <div className="form-text">Obrigatória apenas quando a prioridade for alta.</div>
+              {fieldError("justificativa_prioridade")}
             </div>
             <div className="col-md-6">
               <label htmlFor="justificativa_necessidade" className="form-label">Justificativa da necessidade</label>
-              <textarea id="justificativa_necessidade" className="form-control" rows={2} value={form.justificativa_necessidade} onChange={(e) => atualizar("justificativa_necessidade", e.target.value)} required />
+              <textarea id="justificativa_necessidade" className="form-control" rows={2} value={form.justificativa_necessidade} onChange={(e) => atualizar("justificativa_necessidade", e.target.value)} required {...errorProps("justificativa_necessidade")} />
+              {fieldError("justificativa_necessidade")}
             </div>
             <div className="col-12">
               <label htmlFor="observacoes" className="form-label">Observações do solicitante (opcional)</label>

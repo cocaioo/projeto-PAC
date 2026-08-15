@@ -8,7 +8,12 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from apps.catalogo.models import ItemCatalogo
-from apps.demandas.models import Demanda, ItemDemanda, StatusItemDemanda
+from apps.demandas.models import (
+    Demanda,
+    ItemDemanda,
+    Prioridade,
+    StatusItemDemanda,
+)
 from apps.dfd.models import DFD
 from apps.grupos_contratacao.models import GrupoContratacao
 from apps.unidades.models import Unidade
@@ -79,6 +84,14 @@ class DFDResumoSerializer(serializers.ModelSerializer):
         fields = ["id", "numero"]
 
 class ItemDemandaSerializer(serializers.ModelSerializer):
+    CAMPOS_HERDADOS_CATALOGO = {
+        "tipo": "tipo",
+        "nome": "nome",
+        "descricao": "descricao",
+        "unidade_medida": "unidade_medida",
+        "valor_estimado": "valor_estimado",
+    }
+
     # valor_total é calculado no back-end (quantidade × valor_estimado).
     valor_total = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True
@@ -98,6 +111,65 @@ class ItemDemandaSerializer(serializers.ModelSerializer):
             "status", "status_display", "dfd", "justificativa_devolucao", "ultima_devolucao",
         ]
         read_only_fields = ["demanda", "status"]
+        extra_kwargs = {
+            "item_catalogo": {"required": False, "allow_null": True},
+            # Estes campos continuam aceitos para manter compatibilidade com
+            # o payload manual, mas passam a ser opcionais quando ha catalogo.
+            "tipo": {"required": False},
+            "nome": {"required": False},
+            "descricao": {"required": False},
+            "unidade_medida": {"required": False},
+            "valor_estimado": {"required": False},
+            "justificativa_prioridade": {
+                "required": False,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        errors = {}
+        item_catalogo = attrs.get("item_catalogo")
+
+        if item_catalogo is not None:
+            if not item_catalogo.ativo:
+                errors["item_catalogo"] = [
+                    "O item selecionado esta inativo no catalogo."
+                ]
+
+            demanda = self.context.get("demanda")
+            if demanda is not None and ItemDemanda.objects.filter(
+                demanda=demanda,
+                item_catalogo=item_catalogo,
+            ).exists():
+                errors["item_catalogo"] = [
+                    "Este item do catalogo ja foi adicionado a demanda."
+                ]
+
+            for campo_item, campo_catalogo in self.CAMPOS_HERDADOS_CATALOGO.items():
+                attrs[campo_item] = getattr(item_catalogo, campo_catalogo)
+        elif self.instance is None:
+            for campo in self.CAMPOS_HERDADOS_CATALOGO:
+                valor = attrs.get(campo)
+                if valor is None or (isinstance(valor, str) and not valor.strip()):
+                    errors[campo] = ["Este campo e obrigatorio para itens manuais."]
+
+        prioridade = attrs.get(
+            "prioridade",
+            getattr(self.instance, "prioridade", None),
+        )
+        justificativa = attrs.get(
+            "justificativa_prioridade",
+            getattr(self.instance, "justificativa_prioridade", ""),
+        )
+        if prioridade == Prioridade.ALTA and not (justificativa or "").strip():
+            errors["justificativa_prioridade"] = [
+                "Informe a justificativa para prioridade alta."
+            ]
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
     def get_ultima_devolucao(self, obj):
         devolucoes = getattr(obj, "devolucoes_prefetched", None)
@@ -185,6 +257,19 @@ class ItemDemandaCorrecaoSerializer(serializers.ModelSerializer):
 
         for campo in sorted(raw_keys - allowed - self.CAMPOS_PROTEGIDOS):
             errors.setdefault(campo, ["Campo nao permitido."])
+
+        prioridade = attrs.get(
+            "prioridade",
+            getattr(self.instance, "prioridade", None),
+        )
+        justificativa = attrs.get(
+            "justificativa_prioridade",
+            getattr(self.instance, "justificativa_prioridade", ""),
+        )
+        if prioridade == Prioridade.ALTA and not (justificativa or "").strip():
+            errors["justificativa_prioridade"] = [
+                "Informe a justificativa para prioridade alta."
+            ]
 
         if errors:
             raise serializers.ValidationError(errors)
