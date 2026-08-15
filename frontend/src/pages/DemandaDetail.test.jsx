@@ -74,10 +74,13 @@ function renderDetail() {
   });
 }
 
+async function confirmarReenvio() {
+  await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
+}
+
 describe("DemandaDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, "confirm").mockImplementation(() => true);
   });
 
   it("exibe os dados e itens da demanda", async () => {
@@ -108,6 +111,8 @@ describe("DemandaDetail", () => {
     await userEvent.click(
       screen.getByRole("button", { name: /enviar para validação/i })
     );
+    expect(api.enviarDemanda).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
     await waitFor(() =>
       expect(api.enviarDemanda).toHaveBeenCalledWith("7")
     );
@@ -228,6 +233,8 @@ describe("DemandaDetail", () => {
 
     const btnReenviar = screen.getByRole("button", { name: /reenviar/i });
     await userEvent.click(btnReenviar);
+    expect(api.reenviarItem).not.toHaveBeenCalled();
+    await confirmarReenvio();
 
     expect(api.reenviarItem).toHaveBeenCalledWith(10);
     expect(
@@ -244,6 +251,7 @@ describe("DemandaDetail", () => {
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await confirmarReenvio();
     expect(
       await screen.findByText(/o valor estimado unitário deve ser maior que zero/i)
     ).toBeInTheDocument();
@@ -257,6 +265,7 @@ describe("DemandaDetail", () => {
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await confirmarReenvio();
     expect(
       await screen.findByText(/você não tem permissão para reenviar este item/i)
     ).toBeInTheDocument();
@@ -270,6 +279,7 @@ describe("DemandaDetail", () => {
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await confirmarReenvio();
     expect(
       await screen.findByText(/não é permitido alterar solicitações encerradas ou canceladas/i)
     ).toBeInTheDocument();
@@ -289,11 +299,13 @@ describe("DemandaDetail", () => {
     const btnReenviar = screen.getByRole("button", { name: /reenviar/i });
     await userEvent.click(btnReenviar);
 
-    expect(btnReenviar).toBeDisabled();
-    expect(btnReenviar).toHaveTextContent("Reenviando...");
+    const btnConfirmar = screen.getByRole("button", { name: /confirmar reenvio/i });
+    await userEvent.click(btnConfirmar);
+
+    expect(btnConfirmar).toBeDisabled();
     expect(api.reenviarItem).toHaveBeenCalledTimes(1);
 
-    await userEvent.click(btnReenviar);
+    await userEvent.click(btnConfirmar);
     expect(api.reenviarItem).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
@@ -347,6 +359,7 @@ describe("DemandaDetail", () => {
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await confirmarReenvio();
 
     expect(await screen.findByText(/item nao encontrado/i)).toBeInTheDocument();
     expect(screen.queryByText(/reenviado para valida/i)).not.toBeInTheDocument();
@@ -359,6 +372,7 @@ describe("DemandaDetail", () => {
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await confirmarReenvio();
 
     expect(await screen.findByText(/falha de rede/i)).toBeInTheDocument();
     expect(screen.queryByText(/item reenviado para valida/i)).not.toBeInTheDocument();
@@ -384,6 +398,7 @@ describe("DemandaDetail", () => {
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await confirmarReenvio();
 
     expect(await screen.findByText(/item reenviado para valida/i)).toBeInTheDocument();
     await waitFor(() => expect(api.getDemanda).toHaveBeenCalledTimes(2));

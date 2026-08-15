@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import Spinner from "../components/Spinner";
+import ApiErrorMessage from "../components/ApiErrorMessage";
+import PageHeader from "../components/PageHeader";
+import { Button, Card, Input, LoadingState, Textarea } from "../components/ui";
 
 export default function DemandaForm() {
   const { id } = useParams();
@@ -13,7 +15,7 @@ export default function DemandaForm() {
   );
   const [observacao, setObservacao] = useState("");
   const [carregando, setCarregando] = useState(editando);
-  const [erro, setErro] = useState("");
+  const [erro, setErro] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
@@ -24,13 +26,13 @@ export default function DemandaForm() {
         setAnoReferencia(d.ano_referencia);
         setObservacao(d.observacao || "");
       })
-      .catch((e) => setErro(e.message))
+      .catch(setErro)
       .finally(() => setCarregando(false));
   }, [id, editando]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setErro("");
+    setErro(null);
     setEnviando(true);
     const payload = {
       ano_referencia: Number(anoReferencia),
@@ -42,57 +44,39 @@ export default function DemandaForm() {
         : await api.createDemanda(payload);
       navigate(`/demandas/${demanda.id}`);
     } catch (err) {
-      setErro(err.message || "Não foi possível salvar a demanda.");
+      setErro(err);
     } finally {
       setEnviando(false);
     }
   }
 
-  if (carregando) return <Spinner />;
+  if (carregando) return <LoadingState label="Carregando dados da demanda..." />;
 
   return (
     <div className="row justify-content-center">
       <div className="col-md-6">
-        <h1 className="h4 mb-3">
-          {editando ? "Editar Demanda" : "Nova Demanda"}
-        </h1>
+        <PageHeader eyebrow="Minhas demandas" title={editando ? "Editar demanda" : "Nova demanda"} />
 
-        {erro && (
-          <div className="alert alert-danger" role="alert">
-            {erro}
-          </div>
-        )}
+        <ApiErrorMessage error={erro} title="Não foi possível salvar a demanda" />
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-3">
-            <label htmlFor="ano" className="form-label">
-              Ano de referência
-            </label>
-            <input
+        <Card><form onSubmit={handleSubmit}>
+            <Input
               id="ano"
               type="number"
-              className="form-control"
+              label="Ano de referência"
               value={anoReferencia}
               onChange={(e) => setAnoReferencia(e.target.value)}
               required
             />
-          </div>
-          <div className="mb-3">
-            <label htmlFor="obs" className="form-label">
-              Observação
-            </label>
-            <textarea
+            <Textarea
               id="obs"
-              className="form-control"
+              label="Observação"
               rows={3}
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
             />
-          </div>
-          <button className="btn btn-primary" disabled={enviando}>
-            {enviando ? "Salvando..." : "Salvar"}
-          </button>
-        </form>
+          <Button type="submit" loading={enviando}>Salvar</Button>
+        </form></Card>
       </div>
     </div>
   );

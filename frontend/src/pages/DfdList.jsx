@@ -1,46 +1,47 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import Spinner from "../components/Spinner";
+import ApiErrorMessage from "../components/ApiErrorMessage";
+import PageHeader from "../components/PageHeader";
+import { EmptyState, LoadingState, Table } from "../components/ui";
 import { formatCurrency } from "../utils/format";
 
 export default function DfdList() {
   const [dfds, setDfds] = useState([]);
   const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
+  const [erro, setErro] = useState(null);
 
-  useEffect(() => {
+  const carregar = useCallback(() => {
+    setCarregando(true);
+    setErro(null);
     api
       .listDfds()
       .then((data) => setDfds(data.results || data))
-      .catch((e) => setErro(e.message))
+      .catch(setErro)
       .finally(() => setCarregando(false));
   }, []);
 
-  if (carregando) return <Spinner />;
+  useEffect(() => carregar(), [carregar]);
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h1 className="h3 mb-0">
-          <i className="bi bi-file-earmark-ruled me-2"></i>DFDs
-        </h1>
-        <Link to="/dfds/consolidar" className="btn btn-primary">
+      <PageHeader
+        eyebrow="Consolidação"
+        title="DFDs"
+        description="Consulte os documentos formalizados a partir das demandas validadas."
+        actions={<Link to="/dfds/consolidar" className="pac-button pac-button--primary">
           <i className="bi bi-collection me-1"></i>Consolidar
-        </Link>
-      </div>
+        </Link>}
+      />
 
-      {erro && (
-        <div className="alert alert-danger" role="alert">
-          {erro}
-        </div>
-      )}
-
-      {dfds.length === 0 ? (
-        <p className="text-muted">Nenhum DFD cadastrado.</p>
+      {erro ? (
+        <ApiErrorMessage error={erro} title="Não foi possível carregar os DFDs" onRetry={carregar} />
+      ) : carregando ? (
+        <LoadingState label="Carregando DFDs..." />
+      ) : dfds.length === 0 ? (
+        <EmptyState icon="bi-file-earmark-ruled" title="Nenhum DFD cadastrado" description="Os DFDs aparecerão aqui após a consolidação dos itens validados." />
       ) : (
-        <div className="table-responsive">
-          <table className="table table-hover align-middle">
+          <Table caption="Documentos de formalização de demanda">
             <thead>
               <tr>
                 <th>Número</th>
@@ -66,8 +67,7 @@ export default function DfdList() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </Table>
       )}
     </div>
   );

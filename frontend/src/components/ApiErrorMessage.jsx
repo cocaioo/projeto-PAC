@@ -1,4 +1,3 @@
-import { ApiError } from "../api/client";
 import { Button } from "./ui";
 
 export function InlineMessage({ variant = "info", title, children, onDismiss }) {
@@ -20,10 +19,13 @@ export function InlineMessage({ variant = "info", title, children, onDismiss }) 
 
 export default function ApiErrorMessage({ error, onRetry, title = "Não foi possível concluir" }) {
   if (!error) return null;
-  const apiError = error instanceof ApiError ? error : new ApiError(
-    "Não foi possível concluir a solicitação.",
-    0
-  );
+  const fallbackMessage = typeof error === "string" ? error : error?.message;
+  const mensagemSegura = fallbackMessage && !/(traceback|stack trace|\bat\s+\S+\s*\(|\w+error:\s.*\n)/i.test(fallbackMessage)
+    ? fallbackMessage
+    : "Não foi possível concluir a solicitação.";
+  const apiError = error && typeof error === "object"
+    ? { ...error, message: mensagemSegura }
+    : { message: mensagemSegura, fieldErrors: {} };
   const fieldEntries = Object.entries(apiError.fieldErrors || {});
 
   return (

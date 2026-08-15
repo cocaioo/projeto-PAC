@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import ApiErrorMessage from "../components/ApiErrorMessage";
+import { Button, Card, Input } from "../components/ui";
 
 export default function Login() {
   const { login } = useAuth();
@@ -27,55 +29,41 @@ export default function Login() {
   return (
     <div className="row justify-content-center">
       <div className="col-md-5">
-        <div className="card shadow-sm mt-4">
-          <div className="card-body">
+        <Card className="mt-4">
             <h1 className="h4 mb-3 text-center">
               <i className="bi bi-clipboard-data me-2"></i>PAC UFPI
             </h1>
             <p className="text-muted text-center mb-4">Acesso ao sistema</p>
 
-            {erro && (
-              <div className="alert alert-danger" role="alert">
-                {erro}
-              </div>
-            )}
+            <ApiErrorMessage error={erro} title="Não foi possível entrar" />
 
             <form onSubmit={handleSubmit}>
-              <div className="mb-3">
-                <label htmlFor="username" className="form-label">
-                  Usuário
-                </label>
-                <input
+                <Input
                   id="username"
-                  className="form-control"
+                  label="Usuário"
+                  autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
                 />
-              </div>
-              <div className="mb-3">
-                <label htmlFor="password" className="form-label">
-                  Senha
-                </label>
-                <input
+                <Input
                   id="password"
                   type="password"
-                  className="form-control"
+                  label="Senha"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-              </div>
-              <button
+              <Button
                 type="submit"
-                className="btn btn-primary w-100"
-                disabled={enviando}
+                className="w-100"
+                loading={enviando}
               >
                 {enviando ? "Entrando..." : "Entrar"}
-              </button>
+              </Button>
             </form>
-          </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

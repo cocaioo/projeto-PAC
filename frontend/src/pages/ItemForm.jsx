@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import ApiErrorMessage, { InlineMessage } from "../components/ApiErrorMessage";
 import CatalogItemAutocomplete from "../components/CatalogItemAutocomplete";
+import PageHeader from "../components/PageHeader";
+import { Button, ConfirmDialog, LoadingState } from "../components/ui";
 import { formatCurrency } from "../utils/format";
 
 const CAMPOS_INICIAIS = {
@@ -79,6 +82,7 @@ export default function ItemForm() {
   const [carregandoItem, setCarregandoItem] = useState(isEditing);
   const [enviando, setEnviando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
+  const [confirmarReenvio, setConfirmarReenvio] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
@@ -239,6 +243,7 @@ export default function ItemForm() {
       setErro(err.message || "Não foi possível reenviar o item.");
     } finally {
       setReenviando(false);
+      setConfirmarReenvio(false);
     }
   }
 
@@ -255,7 +260,7 @@ export default function ItemForm() {
   }
 
   if (carregandoItem) {
-    return <div className="text-center py-5">Carregando dados do item...</div>;
+    return <LoadingState label="Carregando dados do item..." />;
   }
 
   const parecer =
@@ -266,17 +271,13 @@ export default function ItemForm() {
   return (
     <div className="row justify-content-center">
       <div className="col-md-8">
-        <h1 className="h4 mb-3">{isEditing ? "Editar item" : "Adicionar item"}</h1>
+        <PageHeader eyebrow="Minhas demandas" title={isEditing ? "Editar item" : "Adicionar item"} />
 
-        {erro && (
-          <div className="alert alert-danger" role="alert">
-            {erro}
-          </div>
-        )}
+        <ApiErrorMessage error={erro} title="Não foi possível salvar o item" />
         {mensagem && (
-          <div className="alert alert-success" role="alert">
+          <InlineMessage variant="success" title="Operação concluída">
             {mensagem}
-          </div>
+          </InlineMessage>
         )}
         {itemAtual?.status === "devolvida" && parecer && (
           <div className="alert alert-warning" role="alert">
@@ -415,19 +416,30 @@ export default function ItemForm() {
             </div>
           </div>
 
-          <button className="btn btn-primary mt-3" disabled={enviando || reenviando}>
+          <Button type="submit" className="mt-3" loading={enviando} disabled={reenviando}>
             {enviando ? "Salvando..." : isEditing ? "Salvar alterações" : "Adicionar item"}
-          </button>
+          </Button>
           {isEditing && itemAtual?.status === "devolvida" && (
             <>
-              <button type="button" className="btn btn-success mt-3 ms-2" disabled={enviando || reenviando || isDirty} onClick={handleReenviar}>
+              <Button variant="success" className="mt-3 ms-2" loading={reenviando} disabled={enviando || isDirty} onClick={() => setConfirmarReenvio(true)}>
                 {reenviando ? "Reenviando..." : "Reenviar"}
-              </button>
+              </Button>
               {isDirty && <div className="form-text">Salve as alterações antes de reenviar.</div>}
             </>
           )}
         </form>
       </div>
+      <ConfirmDialog
+        open={confirmarReenvio}
+        title="Reenviar item"
+        confirmLabel="Confirmar reenvio"
+        confirmVariant="success"
+        loading={reenviando}
+        onClose={() => setConfirmarReenvio(false)}
+        onConfirm={handleReenviar}
+      >
+        <p className="mb-0">Confirma o reenvio deste item corrigido para validação?</p>
+      </ConfirmDialog>
     </div>
   );
 }

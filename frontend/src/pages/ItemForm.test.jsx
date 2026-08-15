@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../test-utils";
 import ItemForm, { validateItemForm } from "./ItemForm";
@@ -362,6 +362,7 @@ describe("ItemForm", () => {
     expect(await screen.findByRole("button", { name: /reenviar/i })).not.toBeDisabled();
 
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledWith("10"));
   });
 
@@ -492,6 +493,8 @@ describe("ItemForm", () => {
 
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    expect(api.reenviarItem).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledTimes(1));
     expect(api.reenviarItem).toHaveBeenCalledWith("10");
     expect(api.reenviarItem.mock.calls[0]).toHaveLength(1);
@@ -529,11 +532,15 @@ describe("ItemForm", () => {
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
     const salvar = screen.getByRole("button", { name: /salvar altera/i });
     const reenviar = screen.getByRole("button", { name: /reenviar/i });
-    await userEvent.dblClick(reenviar);
+    await userEvent.click(reenviar);
+    const confirmar = screen.getByRole("button", { name: /confirmar reenvio/i });
+    await userEvent.dblClick(confirmar);
     expect(reenviar).toBeDisabled();
+    expect(confirmar).toBeDisabled();
     expect(salvar).toBeDisabled();
     expect(api.reenviarItem).toHaveBeenCalledTimes(1);
-    resolveReenvio({ detail: "Reenviado." });
+    await act(async () => resolveReenvio({ detail: "Reenviado." }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /reenviar item/i })).not.toBeInTheDocument());
   });
 });
 

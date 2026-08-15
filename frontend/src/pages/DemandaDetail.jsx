@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import ApiErrorMessage, { InlineMessage } from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
-import { Button, Card, EmptyState, LoadingState, Table } from "../components/ui";
+import { Button, Card, ConfirmDialog, EmptyState, LoadingState, Table } from "../components/ui";
 import { formatCurrency } from "../utils/format";
 import { getStatusConfig } from "../utils/statusConfig";
 
@@ -121,6 +121,7 @@ export default function DemandaDetail() {
   const [mensagem, setMensagem] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [reenviandoId, setReenviandoId] = useState(null);
+  const [confirmacao, setConfirmacao] = useState(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -154,11 +155,11 @@ export default function DemandaDetail() {
       setErroAcao(error);
     } finally {
       setEnviando(false);
+      setConfirmacao(null);
     }
   }
 
   async function handleReenviarItem(itemId) {
-    if (!window.confirm("Deseja reenviar este item para validação?")) return;
     setErroAcao(null);
     setMensagem("");
     setReenviandoId(itemId);
@@ -172,6 +173,7 @@ export default function DemandaDetail() {
       setErroAcao(error);
     } finally {
       setReenviandoId(null);
+      setConfirmacao(null);
     }
   }
 
@@ -260,7 +262,11 @@ export default function DemandaDetail() {
         ) : null}
         footer={isDraft && itens.length > 0 ? (
           <div className="d-flex justify-content-end">
-            <Button variant="success" loading={enviando} onClick={handleEnviar}>
+            <Button
+              variant="success"
+              loading={enviando}
+              onClick={() => setConfirmacao({ tipo: "enviar" })}
+            >
               <i className="bi bi-send" aria-hidden="true" />
               {enviando ? "Enviando..." : "Enviar para validação"}
             </Button>
@@ -355,7 +361,7 @@ export default function DemandaDetail() {
                               variant="success"
                               size="sm"
                               loading={reenviandoId === item.id}
-                              onClick={() => handleReenviarItem(item.id)}
+                              onClick={() => setConfirmacao({ tipo: "reenviar", item })}
                               aria-label={`Reenviar item ${item.nome}`}
                             >
                               <i className="bi bi-send" aria-hidden="true" />
@@ -402,6 +408,29 @@ export default function DemandaDetail() {
           </ol>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmacao)}
+        title={confirmacao?.tipo === "enviar" ? "Enviar demanda" : "Reenviar item"}
+        confirmLabel={confirmacao?.tipo === "enviar" ? "Confirmar envio" : "Confirmar reenvio"}
+        confirmVariant="success"
+        loading={enviando || Boolean(reenviandoId)}
+        onClose={() => setConfirmacao(null)}
+        onConfirm={() => {
+          if (confirmacao?.tipo === "enviar") handleEnviar();
+          if (confirmacao?.tipo === "reenviar") handleReenviarItem(confirmacao.item.id);
+        }}
+      >
+        {confirmacao?.tipo === "enviar" ? (
+          <p className="mb-0">
+            Confirma o envio desta demanda para validação? Depois do envio, o rascunho não poderá ser editado.
+          </p>
+        ) : (
+          <p className="mb-0">
+            Confirma o reenvio do item <strong>{confirmacao?.item?.nome}</strong> para validação?
+          </p>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

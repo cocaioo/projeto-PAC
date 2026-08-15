@@ -75,7 +75,6 @@ afterAll(() => server.close());
 
 describe("Acompanhamento integrado da demanda", () => {
   it("mostra devolução e DFD e permite reenviar somente o item devolvido", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     renderWithRouter(<DemandaDetail />, {
       route: "/demandas/7",
       path: "/demandas/:id",
@@ -87,6 +86,8 @@ describe("Acompanhamento integrado da demanda", () => {
     expect(screen.queryByRole("button", { name: /reenviar item mouse usb/i })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /reenviar item impressora laser/i }));
+    expect(demandRequests).toBe(1);
+    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
 
     expect(await screen.findByText(/item reenviado para validação com sucesso/i)).toBeInTheDocument();
     await waitFor(() => expect(demandRequests).toBe(2));
