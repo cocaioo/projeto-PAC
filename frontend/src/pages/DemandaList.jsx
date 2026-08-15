@@ -1,80 +1,119 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import Spinner from "../components/Spinner";
+import ApiErrorMessage from "../components/ApiErrorMessage";
+import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
+import { EmptyState, LoadingState, Table } from "../components/ui";
 import { formatCurrency } from "../utils/format";
+
+function resultsFrom(data) {
+  if (Array.isArray(data)) return data;
+  return Array.isArray(data?.results) ? data.results : [];
+}
+
+const newDemandLink = (
+  <Link to="/demandas/nova" className="pac-button pac-button--primary">
+    <i className="bi bi-plus-lg" aria-hidden="true" />
+    Nova demanda
+  </Link>
+);
 
 export default function DemandaList() {
   const [demandas, setDemandas] = useState([]);
   const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
+  const [erro, setErro] = useState(null);
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
+    let montado = true;
+
+    setCarregando(true);
+    setErro(null);
     api
       .listDemandas()
-      .then((data) => setDemandas(data.results || data))
-      .catch((e) => setErro(e.message))
-      .finally(() => setCarregando(false));
-  }, []);
+      .then((data) => {
+        if (montado) setDemandas(resultsFrom(data));
+      })
+      .catch((error) => {
+        if (!montado) return;
+        setDemandas([]);
+        setErro(error);
+      })
+      .finally(() => {
+        if (montado) setCarregando(false);
+      });
 
-  if (carregando) return <Spinner />;
+    return () => {
+      montado = false;
+    };
+  }, [tentativa]);
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h1 className="h3 mb-0">
-          <i className="bi bi-file-earmark-text me-2"></i>Demandas
-        </h1>
-        <Link to="/demandas/nova" className="btn btn-primary">
-          <i className="bi bi-plus-lg me-1"></i>Nova Demanda
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow="Planejamento e contratações"
+        title="Minhas demandas"
+        description="Acompanhe a situação das suas solicitações e consulte o andamento de cada item."
+        actions={newDemandLink}
+      />
 
-      {erro && (
-        <div className="alert alert-danger" role="alert">
-          {erro}
-        </div>
-      )}
-
-      {demandas.length === 0 ? (
-        <p className="text-muted">Nenhuma demanda cadastrada.</p>
+      {erro ? (
+        <ApiErrorMessage
+          error={erro}
+          title="Não foi possível carregar suas demandas"
+          onRetry={() => setTentativa((valor) => valor + 1)}
+        />
+      ) : carregando ? (
+        <LoadingState label="Carregando suas demandas..." />
+      ) : demandas.length === 0 ? (
+        <EmptyState
+          icon="bi-file-earmark-plus"
+          title="Nenhuma demanda cadastrada"
+          description="Crie uma demanda para começar a registrar os itens necessários."
+          action={(
+            <Link to="/demandas/nova" className="pac-button pac-button--primary">
+              <i className="bi bi-plus-lg" aria-hidden="true" />
+              Criar primeira demanda
+            </Link>
+          )}
+        />
       ) : (
-        <div className="table-responsive">
-          <table className="table table-hover align-middle">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Unidade</th>
-                <th>Ano</th>
-                <th>Status</th>
-                <th>Valor total</th>
-                <th></th>
+        <Table caption="Demandas cadastradas pelo usuário">
+          <thead>
+            <tr>
+              <th scope="col">Demanda</th>
+              <th scope="col">Unidade</th>
+              <th scope="col">Ano</th>
+              <th scope="col">Status</th>
+              <th scope="col">Valor total</th>
+              <th scope="col" className="text-end">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {demandas.map((demanda) => (
+              <tr key={demanda.id}>
+                <td className="fw-semibold">#{demanda.id}</td>
+                <td>{demanda.unidade_sigla || "—"}</td>
+                <td>{demanda.ano_referencia}</td>
+                <td>
+                  <StatusBadge status={demanda.status} />
+                </td>
+                <td>{formatCurrency(demanda.valor_total)}</td>
+                <td className="text-end">
+                  <Link
+                    to={`/demandas/${demanda.id}`}
+                    className="pac-button pac-button--secondary pac-button--sm"
+                    aria-label={`Acompanhar demanda ${demanda.id}`}
+                  >
+                    Acompanhar
+                    <i className="bi bi-chevron-right" aria-hidden="true" />
+                  </Link>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {demandas.map((d) => (
-                <tr key={d.id}>
-                  <td>{d.id}</td>
-                  <td>{d.unidade_sigla}</td>
-                  <td>{d.ano_referencia}</td>
-                  <td>
-                    <StatusBadge status={d.status} />
-                  </td>
-                  <td>{formatCurrency(d.valor_total)}</td>
-                  <td className="text-end">
-                    <Link
-                      to={`/demandas/${d.id}`}
-                      className="btn btn-sm btn-outline-primary"
-                    >
-                      Ver
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </Table>
       )}
     </div>
   );
