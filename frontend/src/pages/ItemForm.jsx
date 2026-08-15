@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import CatalogItemAutocomplete from "../components/CatalogItemAutocomplete";
+import { formatCurrency } from "../utils/format";
 
 const CAMPOS_INICIAIS = {
+  item_catalogo: null,
+  grupo_nome: "",
   tipo: "material",
   nome: "",
   descricao: "",
@@ -19,6 +23,8 @@ const CAMPOS_INICIAIS = {
 
 function formFromItem(data) {
   return {
+    item_catalogo: data.item_catalogo || null,
+    grupo_nome: data.grupo_nome || data.item_catalogo_detalhe?.grupo_nome || "",
     tipo: data.tipo || "material",
     nome: data.nome || "",
     descricao: data.descricao || "",
@@ -39,6 +45,8 @@ export default function ItemForm() {
   const isEditing = Boolean(itemId);
   const navigate = useNavigate();
   const [form, setForm] = useState(CAMPOS_INICIAIS);
+  const [origem, setOrigem] = useState("manual");
+  const [itemCatalogo, setItemCatalogo] = useState(null);
   const [itemAtual, setItemAtual] = useState(null);
   const [erro, setErro] = useState("");
   const [mensagem, setMensagem] = useState("");
@@ -59,6 +67,15 @@ export default function ItemForm() {
         }
         setItemAtual(data);
         setForm(formFromItem(data));
+        if (data.item_catalogo) {
+          setOrigem("catalogo");
+          setItemCatalogo({
+            id: data.item_catalogo,
+            nome: data.nome,
+            grupo_nome: data.grupo_nome || data.item_catalogo_detalhe?.grupo_nome || "",
+            valor_estimado: data.valor_estimado,
+          });
+        }
         setIsDirty(false);
       })
       .catch((err) => setErro(err.message || "Erro ao carregar item."))
@@ -67,6 +84,43 @@ export default function ItemForm() {
 
   function atualizar(campo, valor) {
     setForm((atual) => ({ ...atual, [campo]: valor }));
+    setIsDirty(true);
+  }
+
+  function mudarOrigem(novaOrigem) {
+    setOrigem(novaOrigem);
+    setItemCatalogo(null);
+    setForm((atual) => ({
+      ...atual,
+      item_catalogo: null,
+      grupo_nome: "",
+      ...(novaOrigem === "catalogo"
+        ? { nome: "", descricao: "", unidade_medida: "", valor_estimado: "" }
+        : {}),
+    }));
+    setIsDirty(true);
+  }
+
+  function selecionarItemCatalogo(item) {
+    setItemCatalogo(item);
+    setForm((atual) => item ? ({
+      ...atual,
+      item_catalogo: item.id,
+      grupo_nome: item.grupo_nome || "",
+      tipo: item.tipo,
+      nome: item.nome,
+      descricao: item.descricao,
+      unidade_medida: item.unidade_medida,
+      valor_estimado: item.valor_estimado,
+    }) : ({
+      ...atual,
+      item_catalogo: null,
+      grupo_nome: "",
+      nome: "",
+      descricao: "",
+      unidade_medida: "",
+      valor_estimado: "",
+    }));
     setIsDirty(true);
   }
 
@@ -79,6 +133,13 @@ export default function ItemForm() {
       ...form,
       quantidade: Number(form.quantidade),
     };
+    delete payload.grupo_nome;
+    if (!payload.item_catalogo) delete payload.item_catalogo;
+    if (isEditing && itemAtual?.item_catalogo) {
+      ["item_catalogo", "tipo", "nome", "descricao", "unidade_medida"].forEach(
+        (campo) => delete payload[campo]
+      );
+    }
     try {
       if (isEditing) {
         const atualizado = await api.updateItem(itemId, payload);
@@ -122,6 +183,8 @@ export default function ItemForm() {
 
   const parecer =
     itemAtual?.ultima_devolucao?.comentario || itemAtual?.justificativa_devolucao || "";
+  const totalVisual = Number(form.quantidade || 0) * Number(form.valor_estimado || 0);
+  const camposCatalogoBloqueados = origem === "catalogo" && Boolean(form.item_catalogo);
 
   return (
     <div className="row justify-content-center">
@@ -150,25 +213,69 @@ export default function ItemForm() {
         )}
 
         <form onSubmit={handleSubmit}>
+          {!isEditing && (
+            <fieldset className="mb-3">
+              <legend className="form-label fw-semibold">Origem do item</legend>
+              <div className="d-flex flex-wrap gap-3">
+                <label className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="radio"
+                    name="origem-item"
+                    value="manual"
+                    checked={origem === "manual"}
+                    onChange={() => mudarOrigem("manual")}
+                  />
+                  <span className="form-check-label">Preenchimento manual</span>
+                </label>
+                <label className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="radio"
+                    name="origem-item"
+                    value="catalogo"
+                    checked={origem === "catalogo"}
+                    onChange={() => mudarOrigem("catalogo")}
+                  />
+                  <span className="form-check-label">Selecionar do catálogo</span>
+                </label>
+              </div>
+            </fieldset>
+          )}
+
+          {origem === "catalogo" && !isEditing && (
+            <CatalogItemAutocomplete
+              selectedItem={itemCatalogo}
+              onSelect={selecionarItemCatalogo}
+            />
+          )}
+
+          {origem === "catalogo" && form.grupo_nome && (
+            <div className="alert alert-info py-2" role="status">
+              <i className="bi bi-diagram-3 me-2" aria-hidden="true" />
+              Grupo de contratação: <strong>{form.grupo_nome}</strong>
+            </div>
+          )}
+
           <div className="row g-3">
             <div className="col-md-4">
               <label htmlFor="tipo" className="form-label">Tipo</label>
-              <select id="tipo" className="form-select" value={form.tipo} onChange={(e) => atualizar("tipo", e.target.value)}>
+              <select id="tipo" className="form-select" value={form.tipo} onChange={(e) => atualizar("tipo", e.target.value)} disabled={camposCatalogoBloqueados}>
                 <option value="material">Material</option>
                 <option value="servico">Serviço</option>
               </select>
             </div>
             <div className="col-md-8">
               <label htmlFor="nome" className="form-label">Nome</label>
-              <input id="nome" className="form-control" value={form.nome} onChange={(e) => atualizar("nome", e.target.value)} required />
+              <input id="nome" className="form-control" value={form.nome} onChange={(e) => atualizar("nome", e.target.value)} required disabled={camposCatalogoBloqueados} />
             </div>
             <div className="col-12">
               <label htmlFor="descricao" className="form-label">Descrição</label>
-              <textarea id="descricao" className="form-control" rows={2} value={form.descricao} onChange={(e) => atualizar("descricao", e.target.value)} required />
+              <textarea id="descricao" className="form-control" rows={2} value={form.descricao} onChange={(e) => atualizar("descricao", e.target.value)} required disabled={camposCatalogoBloqueados} />
             </div>
             <div className="col-md-4">
               <label htmlFor="unidade_medida" className="form-label">Unidade de medida</label>
-              <input id="unidade_medida" className="form-control" value={form.unidade_medida} onChange={(e) => atualizar("unidade_medida", e.target.value)} required />
+              <input id="unidade_medida" className="form-control" value={form.unidade_medida} onChange={(e) => atualizar("unidade_medida", e.target.value)} required disabled={camposCatalogoBloqueados} />
             </div>
             <div className="col-md-4">
               <label htmlFor="quantidade" className="form-label">Quantidade</label>
@@ -206,6 +313,16 @@ export default function ItemForm() {
             <div className="col-12">
               <label htmlFor="observacoes" className="form-label">Observações do solicitante (opcional)</label>
               <textarea id="observacoes" className="form-control" rows={2} value={form.observacoes} onChange={(e) => atualizar("observacoes", e.target.value)} placeholder="Insira detalhes sobre correções efetuadas ou observações adicionais" />
+            </div>
+          </div>
+
+          <div className="pac-card mt-3" aria-live="polite">
+            <div className="pac-card__body d-flex flex-wrap justify-content-between gap-2">
+              <div>
+                <strong>Total estimado</strong>
+                <div className="small text-muted">Cálculo visual; o valor oficial é confirmado pelo servidor.</div>
+              </div>
+              <strong className="fs-5">{formatCurrency(totalVisual)}</strong>
             </div>
           </div>
 

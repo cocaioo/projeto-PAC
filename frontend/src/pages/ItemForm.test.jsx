@@ -11,6 +11,7 @@ vi.mock("../api/client", () => ({
     getItem: vi.fn(),
     updateItem: vi.fn(),
     reenviarItem: vi.fn(),
+    listCatalogo: vi.fn(),
   },
 }));
 
@@ -30,6 +31,53 @@ async function preencherObrigatorios() {
 describe("ItemForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("seleciona item do catálogo, preenche dados e calcula o total visual", async () => {
+    api.listCatalogo.mockResolvedValue({
+      results: [{
+        id: 5,
+        tipo: "material",
+        nome: "Notebook institucional",
+        descricao: "Configuração homologada",
+        unidade_medida: "unidade",
+        valor_estimado: "4200.50",
+        grupo_nome: "TIC",
+        codigo_catmat_catser: "CATMAT-5",
+      }],
+    });
+    api.addItem.mockResolvedValue({ id: 20 });
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+      extraRoutes: [{ path: "/demandas/:id", element: <p>detalhe demanda</p> }],
+    });
+
+    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+
+    expect(screen.getByLabelText(/^nome$/i)).toHaveValue("Notebook institucional");
+    expect(screen.getByLabelText(/valor estimado unitário/i)).toHaveValue(4200.5);
+    expect(screen.getByText(/grupo de contratação:/i)).toHaveTextContent("TIC");
+
+    await userEvent.clear(screen.getByLabelText(/quantidade/i));
+    await userEvent.type(screen.getByLabelText(/quantidade/i), "2");
+    expect(screen.getByText(/8\.401,00/)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
+    await userEvent.type(screen.getByLabelText(/indicação orçamentária/i), "Fonte 1000");
+    await userEvent.type(screen.getByLabelText(/justificativa da prioridade/i), "Planejamento");
+    await userEvent.type(screen.getByLabelText(/justificativa da necessidade/i), "Renovação");
+    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+
+    await waitFor(() => expect(api.addItem).toHaveBeenCalledTimes(1));
+    expect(api.addItem.mock.calls[0][1]).toMatchObject({
+      item_catalogo: 5,
+      nome: "Notebook institucional",
+      valor_estimado: "4200.50",
+      quantidade: 2,
+    });
   });
 
   it("adiciona item à demanda e navega de volta ao detalhe", async () => {
