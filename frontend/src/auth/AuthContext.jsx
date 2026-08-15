@@ -32,7 +32,19 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
-  const value = { user, loading, login, logout, isStaff: !!user?.is_staff };
+  const isAdmin = Boolean(
+    user?.is_staff || user?.perfil === "admin" || user?.perfil === "admin_master"
+  );
+  const value = {
+    user,
+    loading,
+    login,
+    logout,
+    isAdmin,
+    isAdminMaster: Boolean(user?.perfil === "admin_master" || user?.is_superuser),
+    // Mantido durante a migração das telas antigas.
+    isStaff: isAdmin,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
