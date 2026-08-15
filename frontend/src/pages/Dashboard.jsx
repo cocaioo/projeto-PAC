@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import Spinner from "../components/Spinner";
-import { formatCurrency, statusLabel } from "../utils/format";
+import { formatCurrency } from "../utils/format";
+import { getStatusLabel } from "../utils/statusConfig";
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -70,7 +71,7 @@ export default function Dashboard() {
               key={status}
               className="list-group-item d-flex justify-content-between"
             >
-              <span>{statusLabel(status)}</span>
+              <span>{getStatusLabel(status)}</span>
               <span className="badge bg-primary rounded-pill">{total}</span>
             </li>
           ))}

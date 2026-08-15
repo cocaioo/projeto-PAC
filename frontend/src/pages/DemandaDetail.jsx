@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import Spinner from "../components/Spinner";
-import { formatCurrency, statusBadge, statusLabel } from "../utils/format";
+import StatusBadge from "../components/StatusBadge";
+import { formatCurrency } from "../utils/format";
 
 export default function DemandaDetail() {
   const { id } = useParams();
@@ -68,9 +69,7 @@ export default function DemandaDetail() {
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h1 className="h3 mb-0">Demanda #{demanda.id}</h1>
-        <span className={`badge fs-6 ${statusBadge(demanda.status)}`}>
-          {statusLabel(demanda.status)}
-        </span>
+        <StatusBadge status={demanda.status} className="fs-6" />
       </div>
 
       {mensagem && (
@@ -143,9 +142,7 @@ export default function DemandaDetail() {
                   <td>{formatCurrency(item.valor_estimado)}</td>
                   <td>{formatCurrency(item.valor_total)}</td>
                   <td>
-                    <span className={`badge ${statusBadge(item.status)}`}>
-                      {statusLabel(item.status)}
-                    </span>
+                    <StatusBadge status={item.status} />
                   </td>
                   <td className="text-end">
                     {item.status === "devolvida" && demanda.status !== "concluida" && demanda.status !== "cancelada" && (

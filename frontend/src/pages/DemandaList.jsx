@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import Spinner from "../components/Spinner";
-import { formatCurrency, statusBadge, statusLabel } from "../utils/format";
+import StatusBadge from "../components/StatusBadge";
+import { formatCurrency } from "../utils/format";
 
 export default function DemandaList() {
   const [demandas, setDemandas] = useState([]);
@@ -58,9 +59,7 @@ export default function DemandaList() {
                   <td>{d.unidade_sigla}</td>
                   <td>{d.ano_referencia}</td>
                   <td>
-                    <span className={`badge ${statusBadge(d.status)}`}>
-                      {statusLabel(d.status)}
-                    </span>
+                    <StatusBadge status={d.status} />
                   </td>
                   <td>{formatCurrency(d.valor_total)}</td>
                   <td className="text-end">
