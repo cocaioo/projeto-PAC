@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../test-utils";
 import Catalogo from "./Catalogo";
@@ -19,6 +19,10 @@ vi.mock("../api/client", async (importOriginal) => {
       ...actual.api,
       listCatalogo: vi.fn(),
       listGrupos: vi.fn(),
+      createCatalogoItem: vi.fn(),
+      updateCatalogoItem: vi.fn(),
+      ativarCatalogoItem: vi.fn(),
+      desativarCatalogoItem: vi.fn(),
     },
   };
 });
@@ -32,6 +36,8 @@ const mouse = {
   unidade_medida: "un",
   valor_estimado: 50,
   ativo: true,
+  grupo: 2,
+  descricao: "Mouse óptico",
 };
 
 describe("Catalogo", () => {
@@ -127,5 +133,72 @@ describe("Catalogo", () => {
     expect(await screen.findByText("Falha ao consultar.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /tentar novamente/i }));
     expect(await screen.findByText("Mouse")).toBeInTheDocument();
+  });
+
+  it("usuário comum não vê ações administrativas", async () => {
+    renderWithRouter(<Catalogo />);
+    await screen.findByText("Mouse");
+    expect(screen.queryByRole("button", { name: /cadastrar item/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /editar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /desativar/i })).not.toBeInTheDocument();
+  });
+
+  it("ADMIN cadastra item e recebe feedback", async () => {
+    const user = userEvent.setup();
+    authState.isAdmin = true;
+    api.createCatalogoItem.mockResolvedValue({
+      ...mouse,
+      id: 9,
+      nome: "Teclado",
+      descricao: "Teclado USB",
+      valor_estimado: 120,
+    });
+    renderWithRouter(<Catalogo />);
+    await screen.findByText("Mouse");
+    await user.click(screen.getByRole("button", { name: /cadastrar item/i }));
+    const dialog = screen.getByRole("dialog", { name: /cadastrar item/i });
+    await user.type(within(dialog).getByLabelText(/^Nome/), "Teclado");
+    await user.type(within(dialog).getByLabelText(/^Descrição/), "Teclado USB");
+    await user.selectOptions(within(dialog).getByLabelText(/grupo de contratação/i), "2");
+    await user.type(within(dialog).getByLabelText(/unidade de medida/i), "un");
+    await user.type(within(dialog).getByLabelText(/valor estimado/i), "120");
+    await user.click(within(dialog).getByRole("button", { name: /cadastrar item/i }));
+
+    await waitFor(() => expect(api.createCatalogoItem).toHaveBeenCalledWith(expect.objectContaining({
+      nome: "Teclado",
+      grupo: 2,
+      valor_estimado: 120,
+    })));
+    expect(await screen.findByText(/item cadastrado com sucesso/i)).toBeInTheDocument();
+  });
+
+  it("ADMIN edita item existente", async () => {
+    const user = userEvent.setup();
+    authState.isAdmin = true;
+    api.updateCatalogoItem.mockResolvedValue({ ...mouse, nome: "Mouse ergonômico" });
+    renderWithRouter(<Catalogo />);
+    await screen.findByText("Mouse");
+    await user.click(screen.getByRole("button", { name: /editar/i }));
+    const dialog = screen.getByRole("dialog", { name: /editar item/i });
+    const nome = within(dialog).getByLabelText(/^Nome/);
+    await user.clear(nome);
+    await user.type(nome, "Mouse ergonômico");
+    await user.click(within(dialog).getByRole("button", { name: /salvar alterações/i }));
+    await waitFor(() => expect(api.updateCatalogoItem).toHaveBeenCalledWith(1, expect.objectContaining({ nome: "Mouse ergonômico" })));
+  });
+
+  it("só desativa depois da confirmação e permite reativar", async () => {
+    const user = userEvent.setup();
+    authState.isAdmin = true;
+    api.desativarCatalogoItem.mockResolvedValue({ ...mouse, ativo: false });
+    api.ativarCatalogoItem.mockResolvedValue({ ...mouse, ativo: true });
+    renderWithRouter(<Catalogo />);
+    await screen.findByText("Mouse");
+    await user.click(screen.getByRole("button", { name: /desativar/i }));
+    expect(api.desativarCatalogoItem).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /confirmar desativação/i }));
+    await waitFor(() => expect(api.desativarCatalogoItem).toHaveBeenCalledWith(1));
+    await user.click(await screen.findByRole("button", { name: /ativar/i }));
+    await waitFor(() => expect(api.ativarCatalogoItem).toHaveBeenCalledWith(1));
   });
 });

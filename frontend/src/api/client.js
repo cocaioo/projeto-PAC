@@ -156,6 +156,10 @@ export const api = {
   enviarDemanda: (id) => request(`/demandas/${id}/enviar/`, { method: "POST" }),
 
   listCatalogo: (query, options) => request("/catalogo/", { query, ...options }),
+  createCatalogoItem: (body) => request("/catalogo/", { method: "POST", body }),
+  updateCatalogoItem: (id, body) => request(`/catalogo/${id}/`, { method: "PATCH", body }),
+  ativarCatalogoItem: (id) => request(`/catalogo/${id}/ativar/`, { method: "POST" }),
+  desativarCatalogoItem: (id) => request(`/catalogo/${id}/desativar/`, { method: "POST" }),
   listGrupos: (query) => request("/grupos/", { query }),
   listUnidades: (query) => request("/unidades/", { query }),
 

@@ -87,4 +87,40 @@ describe("api client", () => {
     expect(buildQuery({ q: "mouse sem fio", grupo: 2, ativo: "" }))
       .toBe("?q=mouse+sem+fio&grupo=2");
   });
+
+  it("cria item do catálogo pelo endpoint administrativo", async () => {
+    global.fetch = mockFetch(201, { id: 10 });
+    const payload = { nome: "Mouse", grupo: 2 };
+
+    await api.createCatalogoItem(payload);
+
+    const [url, options] = global.fetch.mock.calls[0];
+    expect(url).toContain("/catalogo/");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual(payload);
+  });
+
+  it("edita item do catálogo com atualização parcial", async () => {
+    global.fetch = mockFetch(200, { id: 10, nome: "Mouse sem fio" });
+
+    await api.updateCatalogoItem(10, { nome: "Mouse sem fio" });
+
+    const [url, options] = global.fetch.mock.calls[0];
+    expect(url).toContain("/catalogo/10/");
+    expect(options.method).toBe("PATCH");
+    expect(JSON.parse(options.body)).toEqual({ nome: "Mouse sem fio" });
+  });
+
+  it.each([
+    ["ativarCatalogoItem", "ativar"],
+    ["desativarCatalogoItem", "desativar"],
+  ])("executa a ação administrativa %s", async (method, action) => {
+    global.fetch = mockFetch(200, { id: 10 });
+
+    await api[method](10);
+
+    const [url, options] = global.fetch.mock.calls[0];
+    expect(url).toContain(`/catalogo/10/${action}/`);
+    expect(options.method).toBe("POST");
+  });
 });
