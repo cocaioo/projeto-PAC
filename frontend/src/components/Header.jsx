@@ -21,7 +21,12 @@ export default function Header({ user, logout }) {
         <>
           <div className="app-header__identity">
             <strong>{user.nome_completo || user.username}</strong>
-            <span className="app-header__role">{ROLE_LABELS[user.perfil] || (user.is_staff ? "Administrador" : "Usuário")}</span>
+            <span className="app-header__role">
+              {ROLE_LABELS[user.perfil]
+                || (user.is_admin_master_user
+                  ? "Administrador Master"
+                  : user.is_admin_user ? "Administrador" : "Usuário")}
+            </span>
           </div>
           <Button variant="secondary" size="sm" onClick={handleLogout}>
             <i className="bi bi-box-arrow-right" aria-hidden="true" /> Sair

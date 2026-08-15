@@ -111,6 +111,9 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      - name: Auditar dependências de produção
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Analisar código (ESLint)
         run: npm run lint
 

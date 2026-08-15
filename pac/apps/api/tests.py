@@ -96,6 +96,24 @@ class AutenticacaoTests(APITestCase):
         resp = self.client.get(reverse("api:me"))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["username"], "ana")
+        self.assertFalse(resp.data["is_admin_user"])
+        self.assertFalse(resp.data["is_admin_master_user"])
+
+    def test_me_expoe_capacidades_do_perfil_sem_depender_de_is_staff(self):
+        admin_pac = criar_usuario(
+            username="gestor",
+            unidade=self.unidade,
+            perfil="admin",
+            is_staff=False,
+        )
+        self.client.force_login(admin_pac)
+
+        resp = self.client.get(reverse("api:me"))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["is_admin_user"])
+        self.assertFalse(resp.data["is_admin_master_user"])
+        self.assertFalse(resp.data["is_staff"])
 
 
 # =============================================================================

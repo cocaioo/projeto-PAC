@@ -14,6 +14,10 @@ const server = setupServer(
   http.post("*/api/formulario/", () => HttpResponse.json(
     { nome: ["Este campo é obrigatório."] },
     { status: 400 }
+  )),
+  http.get("*/api/conteudo-malicioso/", () => HttpResponse.json(
+    { nome: ['<img src=x onerror="window.__pacXssExecuted=true">'] },
+    { status: 400 }
   ))
 );
 
@@ -42,5 +46,14 @@ describe("ApiErrorMessage com MSW", () => {
     render(<ErrorProbe action={action} />);
     expect(await screen.findByText(/este campo é obrigatório/i)).toBeInTheDocument();
     expect(screen.getByText(/revise os dados/i)).toBeInTheDocument();
+  });
+
+  it("renderiza conteúdo textual da API sem criar ou executar HTML", async () => {
+    const action = () => api.get("/conteudo-malicioso/");
+    const { container } = render(<ErrorProbe action={action} />);
+
+    expect(await screen.findByText(/<img src=x onerror=/i)).toBeInTheDocument();
+    expect(container.querySelector("img")).toBeNull();
+    expect(window.__pacXssExecuted).toBeUndefined();
   });
 });

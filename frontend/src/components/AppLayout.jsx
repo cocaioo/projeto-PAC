@@ -4,8 +4,13 @@ import Header from "./Header";
 import Sidebar from "./Sidebar";
 
 export default function AppLayout() {
-  const { user, isAdmin, isStaff, logout } = useAuth();
-  const admin = isAdmin ?? isStaff ?? Boolean(user?.is_staff);
+  const { user, isAdmin, logout } = useAuth();
+  const admin = Boolean(
+    isAdmin
+      || user?.is_admin_user
+      || user?.perfil === "admin"
+      || user?.perfil === "admin_master"
+  );
 
   return (
     <div className="app-shell">

@@ -4,14 +4,14 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import * as AuthModule from "../auth/AuthContext";
 
-function renderRoute(staffOnly = false) {
+function renderRoute({ adminOnly = false } = {}) {
   return render(
     <MemoryRouter initialEntries={["/privado"]}>
       <Routes>
         <Route
           path="/privado"
           element={
-            <ProtectedRoute staffOnly={staffOnly}>
+            <ProtectedRoute adminOnly={adminOnly}>
               <p>conteudo protegido</p>
             </ProtectedRoute>
           }
@@ -45,12 +45,32 @@ describe("ProtectedRoute", () => {
     expect(screen.getByText("conteudo protegido")).toBeInTheDocument();
   });
 
-  it("bloqueia usuário comum em rota staffOnly", () => {
+  it("bloqueia usuário comum em rota adminOnly", () => {
     vi.spyOn(AuthModule, "useAuth").mockReturnValue({
-      user: { username: "ana", is_staff: false },
+      user: { username: "ana", perfil: "usuario", is_staff: false },
+      loading: false,
+      isAdmin: false,
+    });
+    renderRoute({ adminOnly: true });
+    expect(screen.getByText("inicio")).toBeInTheDocument();
+  });
+
+  it("autoriza perfil ADMIN em rota adminOnly mesmo quando is_staff é falso", () => {
+    vi.spyOn(AuthModule, "useAuth").mockReturnValue({
+      user: { username: "gestor", perfil: "admin", is_staff: false },
       loading: false,
     });
-    renderRoute(true);
+    renderRoute({ adminOnly: true });
+    expect(screen.getByText("conteudo protegido")).toBeInTheDocument();
+  });
+
+  it("não trata is_staff isolado como perfil administrativo do PAC", () => {
+    vi.spyOn(AuthModule, "useAuth").mockReturnValue({
+      user: { username: "operador", perfil: "usuario", is_staff: true },
+      loading: false,
+      isAdmin: false,
+    });
+    renderRoute({ adminOnly: true });
     expect(screen.getByText("inicio")).toBeInTheDocument();
   });
 });

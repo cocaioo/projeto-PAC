@@ -40,6 +40,15 @@ describe("api client", () => {
     });
   });
 
+  it("substitui o detalhe interno de um erro 403 por mensagem pública", () => {
+    const error = parseApiError(403, {
+      detail: "Regra interna: grupo 42 não corresponde à unidade do operador.",
+    });
+
+    expect(error.message).toBe("Você não tem permissão para realizar esta ação.");
+    expect(error.message).not.toMatch(/grupo 42|unidade do operador/i);
+  });
+
   it("retorna null em respostas 204", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     expect(await api.logout()).toBeNull();
@@ -51,6 +60,31 @@ describe("api client", () => {
     const [url, options] = global.fetch.mock.calls[0];
     expect(url).toContain("/auth/login/");
     expect(JSON.parse(options.body)).toEqual({ username: "ana", password: "senha" });
+  });
+
+  it("não persiste nem registra credenciais ou tokens durante o login", async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const storageSetItem = vi.spyOn(Storage.prototype, "setItem");
+    const consoleSpies = ["log", "info", "warn", "error", "debug"].map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => {})
+    );
+    global.fetch = mockFetch(200, { username: "ana", perfil: "usuario" });
+
+    try {
+      await api.login("ana", "senha-super-secreta");
+
+      const [, options] = global.fetch.mock.calls[0];
+      expect(options.credentials).toBe("include");
+      expect(options.headers.Authorization).toBeUndefined();
+      expect(storageSetItem).not.toHaveBeenCalled();
+      expect(localStorage).toHaveLength(0);
+      expect(sessionStorage).toHaveLength(0);
+      consoleSpies.forEach((spy) => expect(spy).not.toHaveBeenCalled());
+    } finally {
+      storageSetItem.mockRestore();
+      consoleSpies.forEach((spy) => spy.mockRestore());
+    }
   });
 
   it("exporta ApiError", () => {

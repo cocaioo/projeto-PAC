@@ -63,6 +63,16 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("Catálogo integrado ao cliente HTTP", () => {
+  it("não expõe controles administrativos ao usuário comum", async () => {
+    renderWithRouter(<Catalogo />);
+
+    expect(await screen.findByText("Mouse sem fio")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cadastrar item/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /editar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /desativar/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Situação")).not.toBeInTheDocument();
+  });
+
   it("envia apenas uma pesquisa após o debounce", async () => {
     const user = userEvent.setup();
     renderWithRouter(<Catalogo />);
@@ -102,5 +112,16 @@ describe("Catálogo integrado ao cliente HTTP", () => {
     await user.click(within(updatedRow).getByRole("button", { name: /desativar/i }));
     await user.click(screen.getByRole("button", { name: /confirmar desativação/i }));
     await waitFor(() => expect(within(updatedRow).getByText("Inativo")).toBeInTheDocument());
+  });
+
+  it("exibe nome malicioso recebido da API somente como texto", async () => {
+    const nomeMalicioso = '<img src=x onerror="window.__pacCatalogXss=true">';
+    catalogItems = [{ ...baseItem, id: 99, nome: nomeMalicioso }];
+
+    const { container } = renderWithRouter(<Catalogo />);
+
+    expect(await screen.findByText(nomeMalicioso)).toBeInTheDocument();
+    expect(container.querySelector("img")).toBeNull();
+    expect(window.__pacCatalogXss).toBeUndefined();
   });
 });

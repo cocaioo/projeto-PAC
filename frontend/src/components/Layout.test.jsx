@@ -40,15 +40,15 @@ describe("Layout", () => {
     expect(screen.queryByText("Validações")).not.toBeInTheDocument();
   });
 
-  it("mostra menus de staff para administradores", () => {
+  it("não mostra menus administrativos apenas por is_staff", () => {
     vi.spyOn(AuthModule, "useAuth").mockReturnValue({
-      user: { username: "admin", is_staff: true },
-      isStaff: true,
+      user: { username: "operador", perfil: "usuario", is_staff: true },
+      isAdmin: false,
       logout: vi.fn(),
     });
     renderLayout();
-    expect(screen.getByText("Validações")).toBeInTheDocument();
-    expect(screen.getByText("DFDs")).toBeInTheDocument();
+    expect(screen.queryByText("Validações")).not.toBeInTheDocument();
+    expect(screen.queryByText("DFDs")).not.toBeInTheDocument();
   });
 
   it("mostra menus administrativos conforme o perfil PAC mesmo sem is_staff", () => {

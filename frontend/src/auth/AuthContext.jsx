@@ -33,7 +33,9 @@ export function AuthProvider({ children }) {
   }
 
   const isAdmin = Boolean(
-    user?.is_staff || user?.perfil === "admin" || user?.perfil === "admin_master"
+    user?.is_admin_user
+      || user?.perfil === "admin"
+      || user?.perfil === "admin_master"
   );
   const value = {
     user,
@@ -41,7 +43,9 @@ export function AuthProvider({ children }) {
     login,
     logout,
     isAdmin,
-    isAdminMaster: Boolean(user?.perfil === "admin_master" || user?.is_superuser),
+    isAdminMaster: Boolean(
+      user?.is_admin_master_user || user?.perfil === "admin_master"
+    ),
     // Mantido durante a migração das telas antigas.
     isStaff: isAdmin,
   };

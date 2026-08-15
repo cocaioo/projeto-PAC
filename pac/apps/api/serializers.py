@@ -34,6 +34,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         fields = [
             "id", "username", "first_name", "last_name", "nome_completo",
             "email", "siape", "perfil", "unidade", "is_staff",
+            "is_admin_user", "is_admin_master_user",
         ]
 
     def get_nome_completo(self, obj):
