@@ -67,15 +67,27 @@ Depois de iniciar os dois servidores, acesse o front-end, faça login e use os m
 
 ## Dados de homologação
 
-O comando `seed_homologacao` prepara uma massa determinística com unidades, grupos, itens de catálogo e perfis de usuário, ADMIN e ADMIN_MASTER. A senha não possui valor padrão e deve ser fornecida exclusivamente pela variável de ambiente `HOMOLOGACAO_TEST_PASSWORD`.
+O comando `seed_homologacao` prepara uma massa determinística e fictícia com 17 unidades, 5 grupos, 41 itens de catálogo, 41 demandas em oito cenários, históricos de validação e 5 DFDs. Ele nunca possui senha padrão e só grava quando todas estas proteções são atendidas:
 
-```bash
+- `PAC_ENVIRONMENT` é explicitamente `development` ou `homologation`;
+- `ALLOW_HOMOLOGACAO_SEED=True` habilita o opt-in naquele processo;
+- `--apply` autoriza a escrita;
+- `--confirm-target` corresponde ao fingerprint sanitizado mostrado por `--check`;
+- bancos remotos também precisam estar na allowlist `HOMOLOGACAO_SEED_REMOTE_FINGERPRINTS`.
+
+Exemplo local em PowerShell (substitua `<fingerprint>` e defina uma senha temporária no próprio terminal):
+
+```powershell
 cd pac
+$env:PAC_ENVIRONMENT = "development"
+$env:ALLOW_HOMOLOGACAO_SEED = "True"
+$env:HOMOLOGACAO_TEST_PASSWORD = "<senha-temporaria>"
 python manage.py migrate
-python manage.py seed_homologacao
+python manage.py seed_homologacao --check
+python manage.py seed_homologacao --apply --confirm-target <fingerprint>
 ```
 
-O comando pode ser executado novamente para restaurar os registros controlados de demonstração sem duplicá-los. Não grave a senha no repositório, no roteiro ou em capturas de tela; configure-a pelo gerenciador de segredos do ambiente. O passo a passo completo de validação está em [docs/roteiro_homologacao.md](docs/roteiro_homologacao.md).
+O modo `--check` não abre conexão nem grava no banco e não exibe host, nome, usuário, URI ou senha. A reexecução reconcilia somente os registros reservados do seed, mantendo identidades e contagens sem duplicação descontrolada. Nunca habilite o comando em produção, não grave a senha no repositório e remova as variáveis temporárias do terminal ao terminar. O passo a passo completo está em [docs/roteiro_homologacao.md](docs/roteiro_homologacao.md).
 
 ## Como contribuir
 

@@ -19,6 +19,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('DJANGO_SECRET_KEY', default=config('SECRET_KEY', default='unsafe-development-key'))
 DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
+PAC_ENVIRONMENT = config('PAC_ENVIRONMENT', default='')
+ALLOW_HOMOLOGACAO_SEED = config(
+    'ALLOW_HOMOLOGACAO_SEED',
+    default=False,
+    cast=bool,
+)
+HOMOLOGACAO_SEED_REMOTE_FINGERPRINTS = config(
+    'HOMOLOGACAO_SEED_REMOTE_FINGERPRINTS',
+    default='',
+    cast=lambda value: [
+        fingerprint.strip().lower()
+        for fingerprint in value.split(',')
+        if fingerprint.strip()
+    ],
+)
 ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',') if s.strip()])
 CSRF_TRUSTED_ORIGINS = config('DJANGO_CSRF_TRUSTED_ORIGINS', default='', cast=lambda v: [s.strip() for s in v.split(',') if s.strip()])
 
