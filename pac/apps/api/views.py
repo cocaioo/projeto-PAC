@@ -10,9 +10,11 @@ from django.contrib.auth import authenticate, login, logout
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.middleware.csrf import get_token
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -38,7 +40,7 @@ from apps.grupos_contratacao.models import GrupoContratacao
 from apps.unidades.models import Unidade
 from apps.validacoes.models import TipoAcao, Validacao
 
-from .permissions import IsAdminUserPermission
+from .permissions import IsAdminMasterUserPermission, IsAdminUserPermission
 from .serializers import (
     DemandaSerializer,
     DFDSerializer,
@@ -57,6 +59,47 @@ from .validation_serializers import ItemPendenteValidacaoSerializer
 
 def erro_dominio_response(exc: ErroDominio):
     return Response(exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}, status=exc.status_code)
+
+
+def demandas_no_escopo_do_usuario(queryset, usuario):
+    """Aplica o mesmo isolamento de demandas nas telas e nos indicadores."""
+    if getattr(usuario, "is_admin_master_user", False):
+        return queryset
+    if getattr(usuario, "is_admin_user", False):
+        filtro = Q(usuario=usuario)
+        if usuario.unidade_id:
+            filtro |= Q(
+                itens__item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
+            )
+        return queryset.filter(filtro).distinct()
+    return queryset.filter(usuario=usuario)
+
+
+def itens_no_escopo_do_usuario(queryset, usuario):
+    """Inclui itens proprios e, para ADMIN, os grupos da unidade administradora."""
+    if getattr(usuario, "is_admin_master_user", False):
+        return queryset
+    if getattr(usuario, "is_admin_user", False):
+        filtro = Q(demanda__usuario=usuario)
+        if usuario.unidade_id:
+            filtro |= Q(
+                item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
+            )
+        return queryset.filter(filtro).distinct()
+    return queryset.filter(demanda__usuario=usuario)
+
+
+def dfds_no_escopo_do_usuario(queryset, usuario):
+    """Restringe DFDs ao grupo administrado ou a itens do proprio usuario."""
+    if getattr(usuario, "is_admin_master_user", False):
+        return queryset
+
+    filtro = Q(itens_demanda__demanda__usuario=usuario) | Q(
+        itens_vinculados__demanda__usuario=usuario
+    )
+    if getattr(usuario, "is_admin_user", False) and usuario.unidade_id:
+        filtro |= Q(grupo__unidade_admin_id=usuario.unidade_id)
+    return queryset.filter(filtro).distinct()
 
 
 # =============================================================================
@@ -114,10 +157,20 @@ class UnidadeViewSet(viewsets.ModelViewSet):
     queryset = Unidade.objects.all()
     serializer_class = UnidadeSerializer
 
+    def get_permissions(self):
+        if self.action in {"create", "update", "partial_update", "destroy"}:
+            return [IsAuthenticated(), IsAdminMasterUserPermission()]
+        return [IsAuthenticated()]
+
 
 class GrupoContratacaoViewSet(viewsets.ModelViewSet):
     queryset = GrupoContratacao.objects.select_related("unidade_admin").all()
     serializer_class = GrupoContratacaoSerializer
+
+    def get_permissions(self):
+        if self.action in {"create", "update", "partial_update", "destroy"}:
+            return [IsAuthenticated(), IsAdminMasterUserPermission()]
+        return [IsAuthenticated()]
 
 
 class ItemCatalogoViewSet(viewsets.ModelViewSet):
@@ -128,6 +181,35 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
         if self.action in ["create", "update", "partial_update", "destroy", "ativar", "desativar"]:
             return [IsAuthenticated(), IsAdminUserPermission()]
         return [IsAuthenticated()]
+
+    def _validar_grupo_para_mutacao(self, grupo):
+        usuario = self.request.user
+        if getattr(usuario, "is_admin_master_user", False):
+            return
+        if (
+            getattr(usuario, "is_admin_user", False)
+            and usuario.unidade_id
+            and grupo.unidade_admin_id == usuario.unidade_id
+        ):
+            return
+        raise PermissionDenied(
+            "Voce nao tem permissao para gerenciar itens deste grupo de contratacao."
+        )
+
+    def perform_create(self, serializer):
+        self._validar_grupo_para_mutacao(serializer.validated_data["grupo"])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._validar_grupo_para_mutacao(serializer.instance.grupo)
+        self._validar_grupo_para_mutacao(
+            serializer.validated_data.get("grupo", serializer.instance.grupo)
+        )
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._validar_grupo_para_mutacao(instance.grupo)
+        instance.delete()
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -159,6 +241,7 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def ativar(self, request, pk=None):
         item = self.get_object()
+        self._validar_grupo_para_mutacao(item.grupo)
         item.ativo = True
         item.save(update_fields=["ativo", "atualizado_em"])
         return Response(self.get_serializer(item).data)
@@ -166,6 +249,7 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def desativar(self, request, pk=None):
         item = self.get_object()
+        self._validar_grupo_para_mutacao(item.grupo)
         item.ativo = False
         item.save(update_fields=["ativo", "atualizado_em"])
         return Response(self.get_serializer(item).data)
@@ -181,23 +265,24 @@ class DemandaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         from django.db.models import Prefetch
         from apps.validacoes.models import Validacao, TipoAcao
+        user = self.request.user
         ultima_devolucao_prefetch = Prefetch(
             "validacoes",
             queryset=Validacao.objects.filter(acao=TipoAcao.DEVOLVIDO).select_related("usuario").order_by("-criado_em", "-id"),
             to_attr="devolucoes_prefetched"
         )
-        itens_prefetch = Prefetch(
-            "itens",
-            queryset=ItemDemanda.objects.select_related("dfd").prefetch_related(ultima_devolucao_prefetch)
+        itens_visiveis = itens_no_escopo_do_usuario(
+            ItemDemanda.objects.select_related("dfd").prefetch_related(
+                ultima_devolucao_prefetch
+            ),
+            user,
         )
+        itens_prefetch = Prefetch("itens", queryset=itens_visiveis)
         qs = (
             Demanda.objects.select_related("unidade", "usuario")
             .prefetch_related(itens_prefetch)
         )
-        user = self.request.user
-        if not user.is_admin_user:
-            qs = qs.filter(usuario=user)
-        return qs
+        return demandas_no_escopo_do_usuario(qs, user)
 
     def perform_create(self, serializer):
         unidade = getattr(self.request.user, "unidade", None)
@@ -213,6 +298,16 @@ class DemandaViewSet(viewsets.ModelViewSet):
     def _pode_editar(self, demanda):
         user = self.request.user
         return demanda.usuario_id == user.id
+
+    def _pode_cancelar_demanda_inteira(self, demanda):
+        user = self.request.user
+        if demanda.usuario_id == user.id or user.is_admin_master_user:
+            return True
+        if not user.is_admin_user or not user.unidade_id:
+            return False
+        return not demanda.itens.exclude(
+            item_catalogo__grupo__unidade_admin_id=user.unidade_id
+        ).exists()
 
     def update(self, request, *args, **kwargs):
         demanda = self.get_object()
@@ -271,7 +366,12 @@ class DemandaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def enviar(self, request, pk=None):
         with transaction.atomic():
-            demanda = Demanda.objects.select_for_update().get(pk=pk)
+            demanda = get_object_or_404(
+                demandas_no_escopo_do_usuario(
+                    Demanda.objects.select_for_update(), request.user
+                ),
+                pk=pk,
+            )
             if not self._pode_editar(demanda):
                 return Response(
                     {"detail": "Você não tem permissão para enviar esta demanda."},
@@ -315,11 +415,16 @@ class DemandaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def cancelar(self, request, pk=None):
         with transaction.atomic():
-            demanda = Demanda.objects.select_for_update().get(pk=pk)
+            demanda = get_object_or_404(
+                demandas_no_escopo_do_usuario(
+                    Demanda.objects.select_for_update(), request.user
+                ),
+                pk=pk,
+            )
             user = request.user
 
-            # Regra conservadora: dono só cancela em rascunho; admin cancela em qualquer fase ativa
-            if not user.is_admin_user and demanda.usuario_id != user.id:
+            # A acao macro nao pode alterar itens de grupos fora do escopo do ADMIN.
+            if not self._pode_cancelar_demanda_inteira(demanda):
                 return Response(
                     {"detail": "Você não tem permissão para cancelar esta demanda."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -1034,12 +1139,15 @@ class DFDViewSet(viewsets.ModelViewSet):
 
 class DashboardStatsView(APIView):
     def get(self, request):
-        demandas = Demanda.objects
-        itens = ItemDemanda.objects
+        demandas = demandas_no_escopo_do_usuario(
+            Demanda.objects.all(), request.user
+        )
+        itens = itens_no_escopo_do_usuario(ItemDemanda.objects.all(), request.user)
+        dfds = dfds_no_escopo_do_usuario(DFD.objects.all(), request.user)
 
         por_status = {
             row["status"]: row["total"]
-            for row in itens.values("status").annotate(total=Count("id"))
+            for row in itens.order_by().values("status").annotate(total=Count("id"))
         }
         valor_total = itens.aggregate(total=Sum("valor_total"))["total"] or 0
 
@@ -1056,6 +1164,6 @@ class DashboardStatsView(APIView):
                 "consolidados": itens.filter(
                     status=StatusItemDemanda.VINCULADA_DFD
                 ).count(),
-                "total_dfds": DFD.objects.count(),
+                "total_dfds": dfds.count(),
             }
         )
