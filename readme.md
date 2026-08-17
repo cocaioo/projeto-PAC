@@ -1,8 +1,41 @@
 # Sistema de Gestão do PAC UFPI
 
-Plataforma web para cadastrar, validar, consolidar e acompanhar as demandas do Plano Anual de Contratações da UFPI. O projeto usa Django e Django REST Framework no back-end, React com Vite no front-end, Bootstrap para interface, SQLite para persistência local e Docker para execução em produção.
+Plataforma web para cadastrar, validar, consolidar e acompanhar as demandas do Plano Anual de Contratações da UFPI. O projeto usa Django e Django REST Framework no back-end, React com Vite no front-end, Bootstrap para interface, PostgreSQL/SQLite para persistência e Docker para execução em contêineres.
 
-## Como instalar e rodar o projeto
+## Executando com Docker e Docker Compose (Recomendado)
+
+Pré-requisitos: Docker e Docker Compose instalados.
+
+1. Configure as variáveis de ambiente:
+```bash
+cp .env.example .env
+```
+
+2. Suba o banco de dados PostgreSQL e a aplicação com o build do React:
+```bash
+docker compose up --build -d
+```
+
+O script de entrada (`entrypoint.sh`) aguarda o PostgreSQL estar pronto e aplica as migrações automaticamente.
+
+3. Acesse a aplicação:
+* **Aplicação Web:** `http://localhost:8000`
+* **API REST:** `http://localhost:8000/api/`
+* **Django Admin:** `http://localhost:8000/admin/`
+
+4. Para criar um superusuário dentro do contêiner:
+```bash
+docker compose exec app python manage.py createsuperuser
+```
+
+5. Para parar os contêineres:
+```bash
+docker compose down
+```
+
+---
+
+## Como instalar e rodar localmente (Sem Docker)
 
 Pré-requisitos: Python 3.11+, Node.js 20+, npm e Git.
 
@@ -63,7 +96,7 @@ npm test
 
 ## Como usar o projeto
 
-Depois de iniciar os dois servidores, acesse o front-end, faça login e use os módulos principais para cadastrar demandas, revisar itens do catálogo, validar ou devolver solicitações e acompanhar os indicadores no dashboard. Se quiser, inclua aqui capturas de tela dos fluxos mais importantes.
+Depois de iniciar os servidores ou contêineres, acesse o sistema, faça login e use os módulos principais para cadastrar demandas, revisar itens do catálogo, validar ou devolver solicitações e acompanhar os indicadores no dashboard.
 
 ## Dados de homologação
 
@@ -105,6 +138,7 @@ Se a contribuição for grande, vale abrir uma issue antes para alinhar o escopo
 - `docs/`: documentação do projeto e dos fluxos.
 - `templates/`: templates HTML do Django.
 - `static/`: arquivos estáticos servidos pela aplicação.
-- `Dockerfile`: imagem de produção para back-end e front-end.
+- `Dockerfile`: imagem de produção multi-stage para back-end e front-end.
+- `docker-compose.yml`: orquestração de contêineres para banco de dados e aplicação.
 - `requirements.txt`: dependências Python do projeto.
 - `ruff.toml`: configuração de lint do Python.

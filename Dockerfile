@@ -32,7 +32,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Instala as dependências Python primeiro para aproveitar o cache de camadas.
-# SQLite já vem embutido no Python — nenhuma dependência de sistema extra.
 COPY requirements.txt .
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
@@ -50,11 +49,21 @@ WORKDIR /app/pac
 # SECRET_KEY temporária apenas para o build; substituída em runtime.
 RUN SECRET_KEY=build-time-key DEBUG=False python manage.py collectstatic --noinput
 
-# Usuário sem privilégios.
-RUN useradd --create-home appuser
+# Permissões do script de entrada
+RUN chmod +x /app/pac/entrypoint.sh
+
+# Usuário sem privilégios e diretórios de runtime.
+RUN useradd --create-home appuser \
+    && mkdir -p /app/pac/staticfiles /app/pac/media \
+    && chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8000
 
-# Gunicorn como servidor WSGI de produção.
+# Verificação de saúde do contêiner
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/').read()" || exit 1
+
+ENTRYPOINT ["/app/pac/entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
