@@ -1,7 +1,7 @@
 import { CATALOG_GROUP, CATALOG_ITEM, expect, test, USERS } from "../fixtures/pac.js";
 import {
   browserApi,
-  clickCriticalAction,
+  consolidateValidatedItem,
   correctAndResubmitItem,
   createDraftWithCatalog,
   loginAs,
@@ -24,32 +24,11 @@ test.describe("MVP PAC", () => {
     await validateItem(page, demand.itemName);
 
     const dfdNumber = `DFD-${marker}`.slice(0, 90);
-    await page.goto("/dfds/consolidar");
-    await expect(page.getByRole("heading", { name: /Consolida..o e v.nculo de DFD/i })).toBeVisible();
-
-    const cycleSelect = page.getByLabel(/Ciclo PAC|Ciclo de refer.ncia|Ciclo/i);
-    if (await cycleSelect.count()) {
-      const cycleOption = cycleSelect.locator("option").filter({ hasText: String(demand.referenceYear) }).first();
-      await expect(cycleOption).toHaveCount(1);
-      await cycleSelect.selectOption(await cycleOption.getAttribute("value"));
-    }
-    const groupSelect = page.getByLabel(/Grupo de contrata..o/i);
-    if (await groupSelect.count()) {
-      const groupOption = groupSelect.locator("option").filter({ hasText: CATALOG_GROUP }).first();
-      await expect(groupOption).toHaveCount(1);
-      await groupSelect.selectOption(await groupOption.getAttribute("value"));
-    }
-
-    const itemCheckbox = page.getByRole("checkbox", { name: new RegExp(`Selecionar.*${CATALOG_ITEM}`, "i") });
-    await expect(itemCheckbox).toBeVisible();
-    await itemCheckbox.check();
-    await page.getByLabel(/N.mero do DFD/i).fill(dfdNumber);
-    await clickCriticalAction(
-      page,
-      page.getByRole("button", { name: /Consolidar|Vincular DFD/i }).last(),
-      /Confirmar consolida..o|Confirmar v.nculo|Consolidar|Vincular|Confirmar/i
-    );
-    await expect(page.getByText(dfdNumber, { exact: false }).first()).toBeVisible();
+    await consolidateValidatedItem(page, {
+      dfdNumber,
+      itemName: demand.itemName,
+      referenceYear: demand.referenceYear,
+    });
 
     await loginAs(page, USERS.usuario);
     await page.goto(`/demandas/${demand.demandId}`);
@@ -58,7 +37,7 @@ test.describe("MVP PAC", () => {
     await expect(itemRow).toContainText(/Vinculada ao DFD/i);
   });
 
-  test("devolucao: usuario ve o motivo, corrige, reenvia e admin valida", async ({ page, marker }) => {
+  test("devolucao: usuario corrige, reenvia e confirma o DFD apos consolidacao", async ({ page, marker }) => {
     const reason = `Ajustar quantitativo e detalhamento - ${marker}`;
     await loginAs(page, USERS.usuario);
     const demand = await createDraftWithCatalog(page, marker);
@@ -74,6 +53,19 @@ test.describe("MVP PAC", () => {
     await loginAs(page, USERS.admin);
     await openDemandForValidation(page, demand.demandId);
     await validateItem(page, demand.itemName);
+
+    const dfdNumber = `DFD-DEV-${marker}`.slice(0, 90);
+    await consolidateValidatedItem(page, {
+      dfdNumber,
+      itemName: demand.itemName,
+      referenceYear: demand.referenceYear,
+    });
+
+    await loginAs(page, USERS.usuario);
+    await page.goto(`/demandas/${demand.demandId}`);
+    const itemRow = page.getByRole("row").filter({ hasText: demand.itemName });
+    await expect(itemRow).toContainText(dfdNumber);
+    await expect(itemRow).toContainText(/Vinculada ao DFD/i);
   });
 
   test("permissao negada: rota administrativa e grupo alheio ficam bloqueados", async ({ page, marker }) => {

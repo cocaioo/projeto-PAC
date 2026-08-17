@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { CATALOG_ITEM, E2E_PASSWORD } from "../fixtures/pac.js";
+import { CATALOG_GROUP, CATALOG_ITEM, E2E_PASSWORD } from "../fixtures/pac.js";
 
 const ACCENT = ".";
 
@@ -136,6 +136,45 @@ export async function validateItem(page, itemName = CATALOG_ITEM) {
     /Confirmar valida..o|Confirmar/i
   );
   await expect(page.getByText(new RegExp(`${itemName} foi validado com sucesso`, "i"))).toBeVisible();
+}
+
+export async function consolidateValidatedItem(page, {
+  dfdNumber,
+  itemName = CATALOG_ITEM,
+  referenceYear,
+} = {}) {
+  await page.goto("/dfds/consolidar");
+  await expect(page.getByRole("heading", { name: /Consolida..o e v.nculo de DFD/i })).toBeVisible();
+
+  const cycleSelect = page.getByLabel(/Ciclo PAC|Ciclo de refer.ncia|Ciclo/i);
+  if (await cycleSelect.count()) {
+    const cycleOption = cycleSelect.locator("option").filter({ hasText: String(referenceYear) }).first();
+    await expect(cycleOption).toHaveCount(1);
+    const cycleValue = await cycleOption.getAttribute("value");
+    if (await cycleSelect.inputValue() !== cycleValue) {
+      await cycleSelect.selectOption(cycleValue);
+    }
+  }
+
+  const groupSelect = page.getByLabel(/Grupo de contrata..o/i);
+  if (await groupSelect.count()) {
+    const groupOption = groupSelect.locator("option").filter({ hasText: CATALOG_GROUP }).first();
+    await expect(groupOption).toHaveCount(1);
+    await groupSelect.selectOption(await groupOption.getAttribute("value"));
+  }
+
+  const itemCheckbox = page.getByRole("checkbox", {
+    name: new RegExp(`Selecionar.*${itemName}`, "i"),
+  });
+  await expect(itemCheckbox).toBeVisible();
+  await itemCheckbox.check();
+  await page.getByLabel(/N.mero do DFD/i).fill(dfdNumber);
+  await clickCriticalAction(
+    page,
+    page.getByRole("button", { name: /Consolidar|Vincular DFD/i }).last(),
+    /Confirmar consolida..o|Confirmar v.nculo|Consolidar|Vincular|Confirmar/i
+  );
+  await expect(page.getByText(dfdNumber, { exact: false }).first()).toBeVisible();
 }
 
 export async function returnItem(page, reason, itemName = CATALOG_ITEM) {
