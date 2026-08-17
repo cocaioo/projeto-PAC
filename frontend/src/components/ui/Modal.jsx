@@ -8,6 +8,8 @@ export default function Modal({ open, title, children, footer, onClose, closeLab
   useEffect(() => {
     if (!open) return undefined;
     const previousFocus = document.activeElement;
+    const appScrollContainer = document.querySelector('[data-scroll-container="main"]');
+    appScrollContainer?.classList.add("app-content--scroll-locked");
     dialogRef.current?.focus();
     const handleKeyDown = (event) => {
       if (event.key === "Escape") onClose?.();
@@ -15,6 +17,7 @@ export default function Modal({ open, title, children, footer, onClose, closeLab
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      appScrollContainer?.classList.remove("app-content--scroll-locked");
       previousFocus?.focus?.();
     };
   }, [onClose, open]);

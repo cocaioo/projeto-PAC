@@ -27,4 +27,17 @@ describe("componentes administrativos base", () => {
     expect(onClose).toHaveBeenCalledOnce();
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
   });
+
+  it("bloqueia o scroll principal enquanto o Modal está aberto", () => {
+    const main = document.createElement("main");
+    main.dataset.scrollContainer = "main";
+    document.body.append(main);
+
+    const { unmount } = render(<Modal open title="Confirmar">Mensagem</Modal>);
+    expect(main).toHaveClass("app-content--scroll-locked");
+
+    unmount();
+    expect(main).not.toHaveClass("app-content--scroll-locked");
+    main.remove();
+  });
 });

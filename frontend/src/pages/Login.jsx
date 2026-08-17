@@ -27,9 +27,10 @@ export default function Login() {
   }
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-md-5">
-        <Card className="mt-4">
+    <main className="standalone-page">
+      <div className="row justify-content-center">
+        <div className="col-md-5">
+          <Card className="mt-4">
             <h1 className="h4 mb-3 text-center">
               <i className="bi bi-clipboard-data me-2"></i>PAC UFPI
             </h1>
@@ -63,8 +64,9 @@ export default function Login() {
                 {enviando ? "Entrando..." : "Entrar"}
               </Button>
             </form>
-        </Card>
+          </Card>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

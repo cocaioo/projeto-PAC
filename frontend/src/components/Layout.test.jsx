@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import Layout from "./Layout";
 import * as AuthModule from "../auth/AuthContext";
@@ -17,6 +17,35 @@ function renderLayout() {
 }
 
 describe("Layout", () => {
+  it("mantém sidebar, cabeçalho e Outlet na árvore do único scroll principal", () => {
+    vi.spyOn(AuthModule, "useAuth").mockReturnValue({
+      user: { username: "ana", nome_completo: "Ana Silva", perfil: "usuario" },
+      isAdmin: false,
+      logout: vi.fn(),
+    });
+
+    const { container } = renderLayout();
+    const shell = container.querySelector(".app-shell");
+    const sidebar = within(shell).getByRole("complementary", {
+      name: /Navega..o principal/i,
+    });
+    const appMain = shell.querySelector(":scope > .app-main");
+    const header = within(appMain).getByRole("banner");
+    const main = within(appMain).getByRole("main");
+    const inner = main.querySelector(":scope > .app-content__inner");
+
+    expect(shell).toContainElement(sidebar);
+    expect(sidebar.parentElement).toBe(shell);
+    expect(appMain).toBeInTheDocument();
+    expect(appMain.parentElement).toBe(shell);
+    expect(appMain.children[0]).toBe(header);
+    expect(appMain.children[1]).toBe(main);
+    expect(main).toHaveClass("app-content");
+    expect(main).toHaveAttribute("data-scroll-container", "main");
+    expect(inner).toBeInTheDocument();
+    expect(inner).toContainElement(screen.getByText("pagina inicial"));
+  });
+
   it("mostra 'Entrar' quando não autenticado e esconde menus", () => {
     vi.spyOn(AuthModule, "useAuth").mockReturnValue({
       user: null,

@@ -18,8 +18,15 @@ export default function AppLayout() {
       <Sidebar user={user} isAdmin={admin} />
       <div className="app-main">
         <Header user={user} logout={logout} />
-        <main className="app-content" id="conteudo-principal" tabIndex={-1}>
-          <Outlet />
+        <main
+          className="app-content"
+          data-scroll-container="main"
+          id="conteudo-principal"
+          tabIndex={-1}
+        >
+          <div className="app-content__inner">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
