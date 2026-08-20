@@ -57,11 +57,12 @@ class AutorizacaoEscopoBase(APITestCase):
 
     @staticmethod
     def _usuario(username, unidade, perfil="usuario"):
+        siape_hash = abs(hash(username)) % 100000000
         return Usuario.objects.create_user(
             username=username,
             password="senha-de-teste",
             email=f"{username}@example.invalid",
-            siape=f"SIAPE-{username}",
+            siape=f"SIP-{siape_hash:08d}",
             unidade=unidade,
             perfil=perfil,
             is_staff=perfil != "usuario",
