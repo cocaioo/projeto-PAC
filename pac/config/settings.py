@@ -121,8 +121,13 @@ TEMPLATES = [
 # Banco de dados — PostgreSQL
 # =============================================================================
 
+DATABASE_URL = config(
+    'DATABASE_URL',
+    default='postgres://pac_user:pac_password@localhost:5433/pac_db',
+)
+
 DATABASES = {
-    'default': dj_database_url.config(default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+    'default': dj_database_url.parse(DATABASE_URL)
 }
 
 

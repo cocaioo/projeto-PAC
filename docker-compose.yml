@@ -42,7 +42,26 @@ services:
       - static_data:/app/pac/staticfiles
       - media_data:/app/pac/media
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pac_pgadmin
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@pac.ufpi.br}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin_pac}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./.docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+
 volumes:
   postgres_data:
+  pgadmin_data:
   static_data:
   media_data:
+
