@@ -31,14 +31,14 @@ def _pode_administrar_grupo(usuario, grupo):
 @transaction.atomic
 def consolidar_itens_em_dfd(*, usuario, numero_dfd, item_ids, ciclo_pac_id):
     if not getattr(usuario, "is_admin_user", False):
-        raise PermissionDenied("O usu\u00e1rio n\u00e3o possui permiss\u00e3o para consolidar itens.")
+        raise PermissionDenied("O usuário não possui permissão para consolidar itens.")
     ciclo = CicloPAC.objects.filter(pk=ciclo_pac_id).first()
     if ciclo is None:
         raise ValidationError({"ciclo_pac_id": "Ciclo PAC inexistente."})
     if not ciclo.ativo:
-        raise ValidationError({"ciclo_pac_id": "O ciclo PAC informado est\u00e1 inativo."})
+        raise ValidationError({"ciclo_pac_id": "O ciclo PAC informado está inativo."})
     ids = set(item_ids)
-    itens = list(ItemDemanda.objects.select_for_update().select_related(
+    itens = list(ItemDemanda.objects.select_for_update(of=("self",)).select_related(
         "demanda", "demanda__ciclo_pac", "item_catalogo__grupo"
     ).filter(id__in=ids).order_by("id"))
     if len(itens) != len(ids):

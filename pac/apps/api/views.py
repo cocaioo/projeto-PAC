@@ -10,6 +10,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.middleware.csrf import get_token
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -366,12 +367,11 @@ class DemandaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def enviar(self, request, pk=None):
         with transaction.atomic():
-            demanda = get_object_or_404(
-                demandas_no_escopo_do_usuario(
-                    Demanda.objects.select_for_update(), request.user
-                ),
-                pk=pk,
-            )
+            demanda = get_object_or_404(Demanda.objects.select_for_update(), pk=pk)
+            if not demandas_no_escopo_do_usuario(
+                Demanda.objects.filter(pk=demanda.pk), request.user
+            ).exists():
+                raise Http404("Demanda não encontrada.")
             if not self._pode_editar(demanda):
                 return Response(
                     {"detail": "Você não tem permissão para enviar esta demanda."},
@@ -415,12 +415,11 @@ class DemandaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def cancelar(self, request, pk=None):
         with transaction.atomic():
-            demanda = get_object_or_404(
-                demandas_no_escopo_do_usuario(
-                    Demanda.objects.select_for_update(), request.user
-                ),
-                pk=pk,
-            )
+            demanda = get_object_or_404(Demanda.objects.select_for_update(), pk=pk)
+            if not demandas_no_escopo_do_usuario(
+                Demanda.objects.filter(pk=demanda.pk), request.user
+            ).exists():
+                raise Http404("Demanda não encontrada.")
             user = request.user
 
             # A acao macro nao pode alterar itens de grupos fora do escopo do ADMIN.
@@ -513,7 +512,7 @@ class ItemDemandaViewSetLegacy(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def reenviar(self, request, pk=None):
         with transaction.atomic():
-            item = ItemDemanda.objects.select_for_update().select_related("demanda").filter(pk=pk).first()
+            item = ItemDemanda.objects.select_for_update(of=("self",)).select_related("demanda").filter(pk=pk).first()
             if item is None:
                 return Response({"detail": "Item não encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -643,7 +642,7 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
             item_locked = (
-                ItemDemanda.objects.select_for_update()
+                ItemDemanda.objects.select_for_update(of=("self",))
                 .select_related("demanda", "item_catalogo__grupo__unidade_admin")
                 .get(pk=item.pk)
             )
@@ -988,7 +987,7 @@ class ConsolidarDFDView(APIView):
             )
         with transaction.atomic():
             itens = list(
-                ItemDemanda.objects.select_for_update()
+                ItemDemanda.objects.select_for_update(of=("self",))
                 .select_related("item_catalogo", "item_catalogo__grupo", "demanda__ciclo_pac")
                 .filter(id__in=item_ids)
             )

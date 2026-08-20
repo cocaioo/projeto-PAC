@@ -145,7 +145,7 @@ def item_update(request, pk):
 @login_required
 def item_reenviar(request, pk):
     with transaction.atomic():
-        item = ItemDemanda.objects.select_for_update().select_related("demanda").filter(pk=pk).first()
+        item = ItemDemanda.objects.select_for_update(of=("self",)).select_related("demanda").filter(pk=pk).first()
         if item is None:
             messages.error(request, "Item não encontrado.")
             return redirect("demandas:lista")

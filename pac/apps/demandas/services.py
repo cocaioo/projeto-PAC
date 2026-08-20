@@ -215,7 +215,7 @@ def reenviar_item_devolvido(*, item_id: int, usuario) -> ItemDemanda:
 
         try:
             item = (
-                ItemDemanda.objects.select_for_update()
+                ItemDemanda.objects.select_for_update(of=("self",))
                 .select_related("demanda", "item_catalogo__grupo__unidade_admin")
                 .get(pk=item_id, demanda_id=demanda.id)
             )
