@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 # Estágio 1 — Build do front-end React
 # -----------------------------------------------------------------------------
-FROM node:22-slim AS frontend
+FROM node:22-alpine AS frontend
 
 WORKDIR /frontend
 
@@ -22,7 +22,7 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 # Estágio 2 — Aplicação Django
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim AS app
+FROM python:3.12-alpine AS app
 
 # Boas práticas para Python em contêiner.
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -31,10 +31,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Instala as dependências Python primeiro para aproveitar o cache de camadas.
+# Instala as dependências Python e remove ferramentas de build para eliminar CVEs de empacotamento.
 COPY requirements.txt .
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip wheel \
+    && pip install --no-cache-dir -r requirements.txt \
+    && rm -rf /root/.cache /usr/local/lib/python3.12/ensurepip /usr/local/lib/python3.12/site-packages/pip* /usr/local/lib/python3.12/site-packages/wheel* /usr/local/lib/python3.12/site-packages/setuptools*
 
 # Copia o código da aplicação.
 COPY pac/ ./pac/
@@ -53,9 +54,9 @@ RUN SECRET_KEY=build-time-key DEBUG=False python manage.py collectstatic --noinp
 RUN chmod +x /app/pac/entrypoint.sh
 
 # Usuário sem privilégios e diretórios de runtime.
-RUN useradd --create-home appuser \
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
     && mkdir -p /app/pac/staticfiles /app/pac/media \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appgroup /app
 
 USER appuser
 
