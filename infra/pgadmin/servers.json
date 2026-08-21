@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "PAC PostgreSQL",
+      "Group": "Servidores PAC",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "pac_db",
+      "Username": "pac_user",
+      "SSLMode": "prefer"
+    }
+  }
+}

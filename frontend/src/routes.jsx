@@ -16,7 +16,7 @@ import DfdDetail from "./pages/DfdDetail";
 import DfdConsolidar from "./pages/DfdConsolidar";
 
 const auth = (el) => <ProtectedRoute>{el}</ProtectedRoute>;
-const staff = (el) => <ProtectedRoute staffOnly>{el}</ProtectedRoute>;
+const admin = (el) => <ProtectedRoute adminOnly>{el}</ProtectedRoute>;
 
 // Definição central das rotas da SPA.
 export default function AppRoutes() {
@@ -39,14 +39,14 @@ export default function AppRoutes() {
         <Route path="catalogo" element={auth(<Catalogo />)} />
         <Route path="dashboard" element={auth(<Dashboard />)} />
 
-        {/* Validações (staff) */}
-        <Route path="validacoes" element={staff(<ValidacoesList />)} />
-        <Route path="validacoes/:itemId" element={staff(<ValidacaoDecisao />)} />
+        {/* Validações (ADMIN) */}
+        <Route path="validacoes" element={admin(<ValidacoesList />)} />
+        <Route path="validacoes/:demandaId" element={admin(<ValidacaoDecisao />)} />
 
-        {/* DFDs (staff) */}
-        <Route path="dfds" element={staff(<DfdList />)} />
-        <Route path="dfds/consolidar" element={staff(<DfdConsolidar />)} />
-        <Route path="dfds/:id" element={staff(<DfdDetail />)} />
+        {/* DFDs (ADMIN) */}
+        <Route path="dfds" element={admin(<DfdList />)} />
+        <Route path="dfds/consolidar" element={admin(<DfdConsolidar />)} />
+        <Route path="dfds/:id" element={admin(<DfdDetail />)} />
 
         {/* Fallback */}
         <Route path="*" element={<Home />} />

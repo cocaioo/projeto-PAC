@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../test-utils";
-import ItemForm from "./ItemForm";
+import ItemForm, { validateItemForm } from "./ItemForm";
 import { api } from "../api/client";
 
 vi.mock("../api/client", () => ({
@@ -11,6 +11,8 @@ vi.mock("../api/client", () => ({
     getItem: vi.fn(),
     updateItem: vi.fn(),
     reenviarItem: vi.fn(),
+    listCatalogo: vi.fn(),
+    getDemanda: vi.fn(),
   },
 }));
 
@@ -30,6 +32,124 @@ async function preencherObrigatorios() {
 describe("ItemForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    api.getDemanda.mockResolvedValue({ itens: [] });
+  });
+
+  it("exige justificativa somente para prioridade alta", () => {
+    const validBase = {
+      item_catalogo: null,
+      nome: "Item",
+      descricao: "Descrição",
+      unidade_medida: "un",
+      quantidade: 1,
+      valor_estimado: 10,
+      data_prevista: "2027-01-01",
+      indicacao_orcamentaria: "Fonte",
+      justificativa_necessidade: "Necessidade",
+      justificativa_prioridade: "",
+    };
+    expect(validateItemForm({ ...validBase, prioridade: "alta" }))
+      .toHaveProperty("justificativa_prioridade");
+    expect(validateItemForm({ ...validBase, prioridade: "media" }))
+      .not.toHaveProperty("justificativa_prioridade");
+    expect(validateItemForm({ ...validBase, prioridade: "baixa" }))
+      .not.toHaveProperty("justificativa_prioridade");
+  });
+
+  it("não envia formulário inválido e associa erro ao input", async () => {
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+    });
+    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    expect(api.addItem).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^nome$/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText(/informe o nome do item/i)).toHaveAttribute("role", "alert");
+  });
+
+  it("bloqueia item de catálogo duplicado na demanda", async () => {
+    api.getDemanda.mockResolvedValue({ itens: [{ id: 20, item_catalogo: 5 }] });
+    api.listCatalogo.mockResolvedValue({ results: [{
+      id: 5,
+      tipo: "material",
+      nome: "Notebook institucional",
+      descricao: "Configuração homologada",
+      unidade_medida: "unidade",
+      valor_estimado: "4200.50",
+      grupo_nome: "TIC",
+    }] });
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+    });
+    await waitFor(() => expect(api.getDemanda).toHaveBeenCalledWith("7"));
+    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+    expect(screen.getByText(/já foi adicionado à demanda/i)).toBeInTheDocument();
+    expect(api.addItem).not.toHaveBeenCalled();
+  });
+
+  it("mostra erro estruturado do backend no campo correto", async () => {
+    api.addItem.mockRejectedValue({
+      message: "Revise os dados informados.",
+      fieldErrors: { quantidade: ["Quantidade indisponível para este ciclo."] },
+    });
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+    });
+    await preencherObrigatorios();
+    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    expect(await screen.findByText(/quantidade indisponível/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/quantidade/i)).toHaveAttribute("aria-describedby", "quantidade-error");
+  });
+
+  it("seleciona item do catálogo, preenche dados e calcula o total visual", async () => {
+    api.listCatalogo.mockResolvedValue({
+      results: [{
+        id: 5,
+        tipo: "material",
+        nome: "Notebook institucional",
+        descricao: "Configuração homologada",
+        unidade_medida: "unidade",
+        valor_estimado: "4200.50",
+        grupo_nome: "TIC",
+        codigo_catmat_catser: "CATMAT-5",
+      }],
+    });
+    api.addItem.mockResolvedValue({ id: 20 });
+    renderWithRouter(<ItemForm />, {
+      route: "/demandas/7/itens/novo",
+      path: "/demandas/:id/itens/novo",
+      extraRoutes: [{ path: "/demandas/:id", element: <p>detalhe demanda</p> }],
+    });
+
+    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+
+    expect(screen.getByLabelText(/^nome$/i)).toHaveValue("Notebook institucional");
+    expect(screen.getByLabelText(/valor estimado unitário/i)).toHaveValue(4200.5);
+    expect(screen.getByText(/grupo de contratação:/i)).toHaveTextContent("TIC");
+
+    await userEvent.clear(screen.getByLabelText(/quantidade/i));
+    await userEvent.type(screen.getByLabelText(/quantidade/i), "2");
+    expect(screen.getByText(/8\.401,00/)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
+    await userEvent.type(screen.getByLabelText(/indicação orçamentária/i), "Fonte 1000");
+    await userEvent.type(screen.getByLabelText(/justificativa da prioridade/i), "Planejamento");
+    await userEvent.type(screen.getByLabelText(/justificativa da necessidade/i), "Renovação");
+    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+
+    await waitFor(() => expect(api.addItem).toHaveBeenCalledTimes(1));
+    expect(api.addItem.mock.calls[0][1]).toMatchObject({
+      item_catalogo: 5,
+      nome: "Notebook institucional",
+      valor_estimado: "4200.50",
+      quantidade: 2,
+    });
   });
 
   it("adiciona item à demanda e navega de volta ao detalhe", async () => {
@@ -242,6 +362,7 @@ describe("ItemForm", () => {
     expect(await screen.findByRole("button", { name: /reenviar/i })).not.toBeDisabled();
 
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledWith("10"));
   });
 
@@ -372,6 +493,8 @@ describe("ItemForm", () => {
 
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    expect(api.reenviarItem).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledTimes(1));
     expect(api.reenviarItem).toHaveBeenCalledWith("10");
     expect(api.reenviarItem.mock.calls[0]).toHaveLength(1);
@@ -409,11 +532,15 @@ describe("ItemForm", () => {
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
     const salvar = screen.getByRole("button", { name: /salvar altera/i });
     const reenviar = screen.getByRole("button", { name: /reenviar/i });
-    await userEvent.dblClick(reenviar);
+    await userEvent.click(reenviar);
+    const confirmar = screen.getByRole("button", { name: /confirmar reenvio/i });
+    await userEvent.dblClick(confirmar);
     expect(reenviar).toBeDisabled();
+    expect(confirmar).toBeDisabled();
     expect(salvar).toBeDisabled();
     expect(api.reenviarItem).toHaveBeenCalledTimes(1);
-    resolveReenvio({ detail: "Reenviado." });
+    await act(async () => resolveReenvio({ detail: "Reenviado." }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /reenviar item/i })).not.toBeInTheDocument());
   });
 });
 

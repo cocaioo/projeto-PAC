@@ -8,6 +8,7 @@ import { api } from "./api/client";
 vi.mock("./api/client", () => ({
   api: {
     listDemandas: vi.fn().mockResolvedValue({ results: [] }),
+    listDfds: vi.fn().mockResolvedValue({ results: [] }),
     dashboardStats: vi.fn(),
   },
 }));
@@ -48,15 +49,30 @@ describe("AppRoutes", () => {
     expect(api.listDemandas).toHaveBeenCalled();
   });
 
-  it("bloqueia rota de staff para usuário comum", () => {
-    renderAt("/validacoes", {
-      user: { username: "ana", is_staff: false },
+  it.each(["/validacoes", "/dfds", "/dfds/consolidar"])(
+    "bloqueia acesso direto à URL administrativa %s para usuário comum",
+    (path) => {
+      renderAt(path, {
+      user: { username: "ana", perfil: "usuario", is_staff: true },
       loading: false,
+      isAdmin: false,
       isStaff: false,
+      });
+      // Redireciona para a Home e não expõe atalhos administrativos.
+      expect(
+        screen.getByText(/plano anual de contratações da ufpi/i)
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /validações/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /^dfds$/i })).not.toBeInTheDocument();
+    }
+  );
+
+  it("autoriza rota administrativa pelo perfil mesmo sem is_staff", async () => {
+    renderAt("/dfds", {
+      user: { username: "gestor", perfil: "admin", is_staff: false },
+      loading: false,
+      isAdmin: true,
     });
-    // Redireciona para a Home.
-    expect(
-      screen.getByText(/plano anual de contratações da ufpi/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "DFDs" })).toBeInTheDocument();
   });
 });
