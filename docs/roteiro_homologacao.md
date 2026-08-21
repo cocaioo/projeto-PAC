@@ -4,7 +4,7 @@ Este roteiro usa somente registros fictícios reservados pelo namespace `[SEED:H
 
 ## 1. Confirmar o alvo antes de gravar
 
-No PowerShell, dentro de `pac/`, configure variáveis apenas para a sessão atual:
+No PowerShell, dentro de `backend/`, configure variáveis apenas para a sessão atual:
 
 ```powershell
 $env:PAC_ENVIRONMENT = "development"

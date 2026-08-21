@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 REPOSITORY_DIR = Path(__file__).resolve().parents[3]
-BACKEND_DIR = REPOSITORY_DIR / "pac"
+BACKEND_DIR = REPOSITORY_DIR / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 

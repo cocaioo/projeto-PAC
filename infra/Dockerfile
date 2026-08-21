@@ -37,25 +37,26 @@ RUN pip install --no-cache-dir --upgrade pip wheel \
     && pip install --no-cache-dir -r requirements.txt \
     && rm -rf /root/.cache /usr/local/lib/python3.12/ensurepip /usr/local/lib/python3.12/site-packages/pip* /usr/local/lib/python3.12/site-packages/wheel* /usr/local/lib/python3.12/site-packages/setuptools*
 
-# Copia o código da aplicação.
-COPY pac/ ./pac/
+# Copia o código da aplicação back-end e o entrypoint da infra.
+COPY backend/ ./backend/
+COPY infra/entrypoint.sh ./backend/entrypoint.sh
 
 # Copia o build do React gerado no estágio anterior para ser servido
 # como arquivo estático pelo WhiteNoise.
-COPY --from=frontend /frontend/dist ./pac/frontend_build
+COPY --from=frontend /frontend/dist ./backend/frontend_build
 
-WORKDIR /app/pac
+WORKDIR /app/backend
 
 # Coleta os arquivos estáticos (servidos pelo WhiteNoise).
 # SECRET_KEY temporária apenas para o build; substituída em runtime.
 RUN SECRET_KEY=build-time-key DEBUG=False python manage.py collectstatic --noinput
 
 # Permissões do script de entrada
-RUN chmod +x /app/pac/entrypoint.sh
+RUN chmod +x /app/backend/entrypoint.sh
 
 # Usuário sem privilégios e diretórios de runtime.
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
-    && mkdir -p /app/pac/staticfiles /app/pac/media \
+    && mkdir -p /app/backend/staticfiles /app/backend/media \
     && chown -R appuser:appgroup /app
 
 USER appuser
@@ -66,5 +67,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/').read()" || exit 1
 
-ENTRYPOINT ["/app/pac/entrypoint.sh"]
+ENTRYPOINT ["/app/backend/entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

@@ -1,6 +1,6 @@
 # Sistema de Gestão do PAC UFPI
 
-Plataforma web para cadastrar, validar, consolidar e acompanhar as demandas do Plano Anual de Contratações da UFPI. O projeto usa Django e Django REST Framework no back-end, React com Vite no front-end, Bootstrap para interface, PostgreSQL/SQLite para persistência e Docker para execução em contêineres.
+Plataforma web para cadastrar, validar, consolidar e acompanhar as demandas do Plano Anual de Contratações da UFPI. O projeto usa Django e Django REST Framework no back-end, React com Vite no front-end, Bootstrap para interface, PostgreSQL para persistência e Docker para execução em contêineres.
 
 ## Executando com Docker e Docker Compose (Recomendado)
 
@@ -13,31 +13,33 @@ cp .env.example .env
 
 2. Suba o banco de dados PostgreSQL e a aplicação com o build do React:
 ```bash
-docker compose up --build -d
+docker compose -f infra/docker-compose.yml up --build -d
 ```
+*(Alternativamente, entre na pasta `infra` e execute `docker compose up --build -d`)*
 
-O script de entrada (`entrypoint.sh`) aguarda o PostgreSQL estar pronto e aplica as migrações automaticamente.
+O script de entrada (`infra/entrypoint.sh`) aguarda o PostgreSQL estar pronto e aplica as migrações automaticamente.
 
 3. Acesse a aplicação:
 * **Aplicação Web:** `http://localhost:8000`
 * **API REST:** `http://localhost:8000/api/`
 * **Django Admin:** `http://localhost:8000/admin/`
+* **pgAdmin 4:** `http://localhost:5050`
 
 4. Para criar um superusuário dentro do contêiner:
 ```bash
-docker compose exec app python manage.py createsuperuser
+docker compose -f infra/docker-compose.yml exec app python manage.py createsuperuser
 ```
 
 5. Para parar os contêineres:
 ```bash
-docker compose down
+docker compose -f infra/docker-compose.yml down
 ```
 
 ---
 
 ## Como instalar e rodar localmente (Sem Docker)
 
-Pré-requisitos: Python 3.11+, Node.js 20+, npm e Git.
+Pré-requisitos: Python 3.11+, Node.js 20+, npm, Git e PostgreSQL.
 
 1. Clone o repositório e entre na pasta do projeto:
 
@@ -68,7 +70,7 @@ copy .env.example .env
 5. Aplique as migrações e suba a API:
 
 ```bash
-cd pac
+cd backend
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
@@ -87,8 +89,8 @@ Por padrão, o front-end roda em `http://localhost:5173` e a API em `http://loca
 7. Se quiser validar tudo, rode os testes:
 
 ```bash
-cd pac
-python manage.py test
+cd backend
+python manage.py test apps
 
 cd ../frontend
 npm test
@@ -111,7 +113,7 @@ O comando `seed_homologacao` prepara uma massa determinística e fictícia com 1
 Exemplo local em PowerShell (substitua `<fingerprint>` e defina uma senha temporária no próprio terminal):
 
 ```powershell
-cd pac
+cd backend
 $env:PAC_ENVIRONMENT = "development"
 $env:ALLOW_HOMOLOGACAO_SEED = "True"
 $env:HOMOLOGACAO_TEST_PASSWORD = "<senha-temporaria>"
@@ -133,12 +135,9 @@ Se a contribuição for grande, vale abrir uma issue antes para alinhar o escopo
 
 ## Estrutura de pastas
 
-- `pac/`: back-end Django, apps, rotas e configuração principal.
-- `frontend/`: SPA em React com testes e configuração do Vite.
-- `docs/`: documentação do projeto e dos fluxos.
-- `templates/`: templates HTML do Django.
-- `static/`: arquivos estáticos servidos pela aplicação.
-- `Dockerfile`: imagem de produção multi-stage para back-end e front-end.
-- `docker-compose.yml`: orquestração de contêineres para banco de dados e aplicação.
+- `backend/`: back-end Django (aplicações, configurações, rotas, templates e static).
+- `frontend/`: SPA em React com testes e configuração do Vite / Playwright.
+- `infra/`: conteinerização e infraestrutura (Dockerfile, docker-compose.yml, entrypoint.sh e pgAdmin).
+- `docs/`: documentação do projeto e roteiros operacionais.
 - `requirements.txt`: dependências Python do projeto.
-- `ruff.toml`: configuração de lint do Python.
+- `ruff.toml`: configuração de linting do Python (Ruff).

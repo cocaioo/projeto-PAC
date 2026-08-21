@@ -272,7 +272,7 @@ Registrar neste formato:
 - Em andamento:
   - Histórico visual completo de devoluções ainda não foi implementado; a interface exibe a última devolução.
 - Bloqueio:
-  - SQLite não valida lock real por linha com `select_for_update`; semântica concorrente deve ser confirmada em banco com suporte a row locks.
+  - Semântica concorrente e validação de locks por linha com `select_for_update` devem ser confirmadas no PostgreSQL com suporte a row locks.
   - Fluxos legados/server-side de validação, consolidação e reenvio ainda têm pontos com ordem item → demanda e precisam de cobertura própria antes de refatoração ampla.
 
 ### Miguel

@@ -6,16 +6,12 @@ import path from "node:path";
 export const supportDir = path.dirname(fileURLToPath(import.meta.url));
 export const frontendDir = path.resolve(supportDir, "../..");
 export const repositoryDir = path.resolve(frontendDir, "..");
-export const backendDir = path.join(repositoryDir, "pac");
+export const backendDir = path.join(repositoryDir, "backend");
 export const runtimeDir = path.join(frontendDir, ".e2e");
-export const databasePath = path.resolve(
-  process.env.PAC_E2E_DATABASE || path.join(runtimeDir, "pac-e2e.sqlite3")
-);
-const databaseRelativePath = path.relative(runtimeDir, databasePath);
-export const databaseIsInsideRuntime = Boolean(databaseRelativePath)
-  && databaseRelativePath !== ".."
-  && !databaseRelativePath.startsWith(`..${path.sep}`)
-  && !path.isAbsolute(databaseRelativePath);
+export const databaseUrl =
+  process.env.DATABASE_URL
+  || process.env.PAC_E2E_DATABASE_URL
+  || "postgres://pac_user:pac_password@localhost:5433/pac_db";
 export const serverStatePath = path.join(runtimeDir, "servers.json");
 
 export function pythonExecutable() {
@@ -26,14 +22,13 @@ export function pythonExecutable() {
   return candidates.find(existsSync) || (process.platform === "win32" ? "python.exe" : "python3");
 }
 
-const sqliteUrlPath = databasePath.replaceAll("\\", "/");
 const frontendPort = Number(process.env.PAC_E2E_FRONTEND_PORT || 4173);
 const frontendOrigin = new URL(
   process.env.PAC_E2E_BASE_URL || `http://127.0.0.1:${frontendPort}`
 ).origin;
 export const backendEnv = {
   ...process.env,
-  DATABASE_URL: `sqlite:///${sqliteUrlPath}`,
+  DATABASE_URL: databaseUrl,
   DJANGO_DEBUG: "True",
   DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1",
   DJANGO_CORS_ALLOWED_ORIGINS: frontendOrigin,

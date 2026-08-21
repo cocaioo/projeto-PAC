@@ -1,11 +1,9 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import {
   backendDir,
   backendEnv,
-  databaseIsInsideRuntime,
-  databasePath,
   frontendDir,
   pythonExecutable,
   runtimeDir,
@@ -38,15 +36,6 @@ export default async function globalSetup() {
   await assertPortAvailable(backendPort, "backend");
   await assertPortAvailable(frontendPort, "frontend");
   mkdirSync(runtimeDir, { recursive: true });
-  if (process.env.PAC_E2E_KEEP_DATABASE !== "1") {
-    if (!databaseIsInsideRuntime) {
-      throw new Error(
-        "PAC_E2E_DATABASE precisa apontar para frontend/.e2e/ para permitir o reset. "
-        + "Use PAC_E2E_KEEP_DATABASE=1 se o banco externo foi preparado explicitamente."
-      );
-    }
-    rmSync(databasePath, { force: true });
-  }
   runPython(["manage.py", "migrate", "--noinput"], "Migracao do banco E2E");
   runPython([path.join(supportDir, "seed_e2e.py")], "Carga da massa E2E");
 

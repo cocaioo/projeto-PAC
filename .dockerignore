@@ -16,13 +16,14 @@ env/
 .env
 .env.example
 
-# Banco de dados local e arquivos gerados
-*.sqlite3
-db.sqlite3
+# Arquivos gerados
+backend/staticfiles/
+backend/media/
 staticfiles/
 media/
 
 # Docker / dev
+infra/
 Dockerfile
 .dockerignore
 

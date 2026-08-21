@@ -41,10 +41,10 @@ jobs:
         run: pip install ruff
 
       - name: Analisar código (lint)
-        run: ruff check pac
+        run: ruff check backend
 
       - name: Verificar formatação (informativo)
-        run: ruff format --check pac
+        run: ruff format --check backend
         continue-on-error: true
 
   test:
@@ -71,23 +71,23 @@ jobs:
           pip install -r requirements.txt
 
       - name: Verificar projeto Django (system checks)
-        working-directory: pac
+        working-directory: backend
         run: python manage.py check
 
       - name: Checar migrações pendentes
-        working-directory: pac
+        working-directory: backend
         run: python manage.py makemigrations --check --dry-run
 
       - name: Aplicar migrações
-        working-directory: pac
+        working-directory: backend
         run: python manage.py migrate --noinput
 
       - name: Coletar arquivos estáticos
-        working-directory: pac
+        working-directory: backend
         run: python manage.py collectstatic --noinput
 
       - name: Executar testes
-        working-directory: pac
+        working-directory: backend
         run: python manage.py test --verbosity 2
 
   frontend:

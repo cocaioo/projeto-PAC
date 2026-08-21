@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, override_settings
 
@@ -14,10 +12,12 @@ from apps.core.seed_safety import (
 )
 
 
-SQLITE_DATABASES = {
+LOCAL_DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": str(Path("pac") / "test-seed-safety.sqlite3"),
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "pac_db",
+        "HOST": "localhost",
+        "PORT": "5433",
         "USER": "usuario-que-nao-deve-aparecer",
         "PASSWORD": "senha-que-nao-deve-aparecer",
     }
@@ -58,7 +58,7 @@ class SeedSafetyFingerprintTests(SimpleTestCase):
         self.assertEqual(len(fingerprint), TARGET_FINGERPRINT_LENGTH)
 
     @override_settings(
-        DATABASES=SQLITE_DATABASES,
+        DATABASES=LOCAL_DATABASES,
         PAC_ENVIRONMENT="development",
         ALLOW_HOMOLOGACAO_SEED=False,
     )
@@ -66,15 +66,15 @@ class SeedSafetyFingerprintTests(SimpleTestCase):
         target = inspect_seed_target()
         output = format_seed_target_check()
 
-        self.assertEqual(target.backend, "sqlite3")
+        self.assertEqual(target.backend, "postgresql")
         self.assertTrue(target.is_local)
         self.assertEqual(target.environment, "development")
         self.assertIn(f"fingerprint={target.fingerprint}", output)
         self.assertIn("scope=local", output)
         self.assertIn("credentials=omitted", output)
-        self.assertNotIn(SQLITE_DATABASES["default"]["USER"], output)
-        self.assertNotIn(SQLITE_DATABASES["default"]["PASSWORD"], output)
-        self.assertNotIn(SQLITE_DATABASES["default"]["NAME"], output)
+        self.assertNotIn(LOCAL_DATABASES["default"]["USER"], output)
+        self.assertNotIn(LOCAL_DATABASES["default"]["PASSWORD"], output)
+        self.assertNotIn(LOCAL_DATABASES["default"]["NAME"], output)
 
     @override_settings(
         DATABASES=REMOTE_DATABASES,
@@ -92,7 +92,7 @@ class SeedSafetyFingerprintTests(SimpleTestCase):
         with self.assertRaisesMessage(CommandError, "Alias de banco desconhecido"):
             inspect_seed_target("inexistente")
 
-    @override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ""}})
+    @override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.postgresql", "NAME": ""}})
     def test_configuracao_incompleta_falha_fechada(self):
         with self.assertRaisesMessage(CommandError, "ENGINE e NAME"):
             inspect_seed_target()
@@ -100,7 +100,7 @@ class SeedSafetyFingerprintTests(SimpleTestCase):
 
 class SeedSafetyValidationTests(SimpleTestCase):
     @override_settings(
-        DATABASES=SQLITE_DATABASES,
+        DATABASES=LOCAL_DATABASES,
         PAC_ENVIRONMENT="production",
         ALLOW_HOMOLOGACAO_SEED=True,
     )
@@ -111,7 +111,7 @@ class SeedSafetyValidationTests(SimpleTestCase):
             validate_seed_execution(apply=True, confirm_target=fingerprint)
 
     @override_settings(
-        DATABASES=SQLITE_DATABASES,
+        DATABASES=LOCAL_DATABASES,
         PAC_ENVIRONMENT="",
         ALLOW_HOMOLOGACAO_SEED=True,
     )
@@ -122,7 +122,7 @@ class SeedSafetyValidationTests(SimpleTestCase):
             validate_seed_execution(apply=True, confirm_target=fingerprint)
 
     @override_settings(
-        DATABASES=SQLITE_DATABASES,
+        DATABASES=LOCAL_DATABASES,
         PAC_ENVIRONMENT="development",
         ALLOW_HOMOLOGACAO_SEED=False,
     )
@@ -133,7 +133,7 @@ class SeedSafetyValidationTests(SimpleTestCase):
             validate_seed_execution(apply=True, confirm_target=fingerprint)
 
     @override_settings(
-        DATABASES=SQLITE_DATABASES,
+        DATABASES=LOCAL_DATABASES,
         PAC_ENVIRONMENT="development",
         ALLOW_HOMOLOGACAO_SEED="False",
     )
@@ -144,7 +144,7 @@ class SeedSafetyValidationTests(SimpleTestCase):
             validate_seed_execution(apply=True, confirm_target=fingerprint)
 
     @override_settings(
-        DATABASES=SQLITE_DATABASES,
+        DATABASES=LOCAL_DATABASES,
         PAC_ENVIRONMENT="development",
         ALLOW_HOMOLOGACAO_SEED=True,
     )
@@ -159,7 +159,7 @@ class SeedSafetyValidationTests(SimpleTestCase):
             validate_seed_execution(apply=True, confirm_target="fingerprint-errado")
 
     @override_settings(
-        DATABASES=SQLITE_DATABASES,
+        DATABASES=LOCAL_DATABASES,
         PAC_ENVIRONMENT="development",
         ALLOW_HOMOLOGACAO_SEED=True,
     )

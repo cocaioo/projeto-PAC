@@ -7,7 +7,6 @@ import hmac
 import ipaddress
 import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from django.conf import settings
@@ -81,9 +80,6 @@ def _canonical_target(database_config: Mapping[str, Any]) -> str:
     host = str(database_config.get("HOST") or "").strip().lower()
     port = str(database_config.get("PORT") or "").strip()
 
-    if engine.endswith("sqlite3") and name:
-        name = str(Path(name).expanduser().resolve())
-
     return "\x1f".join((engine, host, port, name))
 
 
@@ -105,9 +101,6 @@ def _is_loopback_host(host: str) -> bool:
 
 
 def _is_local_target(database_config: Mapping[str, Any]) -> bool:
-    engine = str(database_config.get("ENGINE") or "").strip().lower()
-    if engine.endswith("sqlite3"):
-        return True
     return _is_loopback_host(str(database_config.get("HOST") or ""))
 
 
