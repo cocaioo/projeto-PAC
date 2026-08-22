@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+staticfiles/
+media/
+.ruff_cache/
+.env
+.env.local
+*.log

@@ -1,16 +1,125 @@
 # Sistema de Gestão do PAC UFPI
 
-Plataforma web para cadastrar, validar, consolidar e acompanhar as demandas do Plano Anual de Contratações da UFPI. O projeto usa Django e Django REST Framework no back-end, React com Vite no front-end, Bootstrap para interface, SQLite para persistência local e Docker para execução em produção.
+Plataforma web para cadastrar, validar, consolidar e acompanhar as demandas do Plano Anual de Contratações da UFPI. O projeto adota uma arquitetura conteinerizada em três camadas com **Django REST Framework** no back-end (Gunicorn), **React com Vite** no front-end servido por **Nginx** como reverse proxy, **PostgreSQL** para persistência e **Docker Compose** para orquestração.
 
-## Como instalar e rodar o projeto
+---
 
-Pré-requisitos: Python 3.11+, Node.js 20+, npm e Git.
+## Arquitetura de Contêineres (Docker Compose)
+
+```text
+Host (Porta 80 / 8000)
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  pac_frontend (Nginx Alpine)                                │
+│  ├── Servidor de arquivos estáticos da SPA (React / Vite)   │
+│  ├── Roteamento Client-Side (Fallback SPA: index.html)      │
+│  └── Reverse Proxy para /api/, /admin/, /static/, /media/   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ (Rede Interna: pac_network)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  pac_backend (Django / DRF + Gunicorn — Python 3.12 Alpine) │
+│  ├── API REST (/api/) e Autenticação por Sessão             │
+│  ├── Migrações automáticas & Entrypoint seguro              │
+│  └── Usuário sem privilégios (appuser)                      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ (Rede Interna: pac_network)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  pac_postgres (PostgreSQL 16 Alpine)                        │
+│  └── Armazenamento persistente (Volume postgres_data)       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Executando com Docker e Docker Compose (Recomendado)
+
+Pré-requisitos: Docker e Docker Compose instalados.
+
+### 1. Configure as variáveis de ambiente
+
+Copie o modelo de variáveis de ambiente:
+
+```bash
+cp .env.example .env
+```
+
+Ajuste as configurações no `.env` conforme necessário (`DJANGO_SECRET_KEY`, credenciais do PostgreSQL, portas).
+
+### 2. Construa as imagens e inicialize os serviços
+
+Execute o comando padrão a partir da raiz do projeto:
+
+```bash
+docker compose up -d --build
+```
+
+*(Ou alternativamente: `docker compose -f infra/docker-compose.yml up -d --build`)*
+
+O contêiner `pac_backend` aguardará a inicialização saudável do PostgreSQL (`db`), executará automaticamente as migrações (`migrate --noinput`) e coletará os arquivos estáticos necessários antes de iniciar o servidor Gunicorn. O Nginx no `pac_frontend` subirá e ficará pronto para receber as requisições.
+
+### 3. Acesse a aplicação
+
+* **Aplicação Web (SPA React via Nginx):** `http://localhost` (ou porta configurada em `PORT`, ex: `http://localhost:80`)
+* **API REST (via Nginx Proxy):** `http://localhost/api/`
+* **Django Admin (via Nginx Proxy):** `http://localhost/admin/`
+* **pgAdmin 4 (Gerenciamento do BD):** `http://localhost:5050` (Login: `admin@pac.ufpi.br` / Senha: `admin_pac`)
+
+### 4. Criar superusuário no Django
+
+Para criar um administrador diretamente no contêiner do backend:
+
+```bash
+docker compose exec backend python manage.py createsuperuser
+```
+
+### 5. Executar migrações ou comandos manuais
+
+```bash
+# Executar migrações
+docker compose exec backend python manage.py migrate
+
+# Carregar dados de homologação (em ambiente de teste/desenvolvimento)
+docker compose exec backend python manage.py seed_homologacao --check
+```
+
+### 6. Visualizar logs e status dos contêineres
+
+```bash
+# Verificar status e healthchecks
+docker compose ps
+
+# Visualizar logs em tempo real
+docker compose logs -f
+
+# Logs específicos do backend ou frontend
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+### 7. Parar os contêineres
+
+```bash
+# Parar os serviços mantendo os dados persistidos
+docker compose down
+
+# Parar e remover volumes de dados (CUIDADO: apaga dados do PostgreSQL)
+docker compose down -v
+```
+
+---
+
+## Como instalar e rodar localmente (Sem Docker)
+
+Pré-requisitos: Python 3.11+, Node.js 20+, npm, Git e PostgreSQL.
 
 1. Clone o repositório e entre na pasta do projeto:
 
 ```bash
 git clone <url-do-repositorio>
-cd PAC-UFPI-Final
+cd projeto-pac
 ```
 
 2. Crie e ative o ambiente virtual:
@@ -35,7 +144,7 @@ copy .env.example .env
 5. Aplique as migrações e suba a API:
 
 ```bash
-cd pac
+cd backend
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
@@ -49,38 +158,65 @@ npm install
 npm run dev
 ```
 
-Por padrão, o front-end roda em `http://localhost:5173` e a API em `http://localhost:8000`.
+Por padrão no modo desenvolvimento local, o front-end roda em `http://localhost:5173` e a API em `http://localhost:8000`.
 
-7. Se quiser validar tudo, rode os testes:
+7. Execução dos testes automatizados:
 
 ```bash
-cd pac
-python manage.py test
+# Testes do backend (Django)
+cd backend
+python manage.py test apps
 
+# Testes do frontend (Vitest)
 cd ../frontend
 npm test
 ```
 
-## Como usar o projeto
+---
 
-Depois de iniciar os dois servidores, acesse o front-end, faça login e use os módulos principais para cadastrar demandas, revisar itens do catálogo, validar ou devolver solicitações e acompanhar os indicadores no dashboard. Se quiser, inclua aqui capturas de tela dos fluxos mais importantes.
+## Dados de Homologação (Seed)
 
-## Como contribuir
+O comando `seed_homologacao` prepara uma massa determinística e fictícia com 17 unidades, 5 grupos, 41 itens de catálogo, 41 demandas em oito cenários, históricos de validação e 5 DFDs. Ele nunca possui senha padrão e só grava quando todas estas proteções são atendidas:
 
-1. Faça um fork do projeto.
-2. Crie uma branch para sua alteração.
-3. Implemente a mudança e valide localmente.
-4. Abra uma pull request explicando o que foi alterado.
+- `PAC_ENVIRONMENT` é explicitamente `development` ou `homologation`;
+- `ALLOW_HOMOLOGACAO_SEED=True` habilita o opt-in naquele processo;
+- `--apply` autoriza a escrita;
+- `--confirm-target` corresponde ao fingerprint sanitizado mostrado por `--check`;
+- bancos remotos também precisam estar na allowlist `HOMOLOGACAO_SEED_REMOTE_FINGERPRINTS`.
 
-Se a contribuição for grande, vale abrir uma issue antes para alinhar o escopo.
+Exemplo local em PowerShell (substitua `<fingerprint>` e defina uma senha temporária no próprio terminal):
 
-## Estrutura de pastas
+```powershell
+cd backend
+$env:PAC_ENVIRONMENT = "development"
+$env:ALLOW_HOMOLOGACAO_SEED = "True"
+$env:HOMOLOGACAO_TEST_PASSWORD = "<senha-temporaria>"
+python manage.py migrate
+python manage.py seed_homologacao --check
+python manage.py seed_homologacao --apply --confirm-target <fingerprint>
+```
 
-- `pac/`: back-end Django, apps, rotas e configuração principal.
-- `frontend/`: SPA em React com testes e configuração do Vite.
-- `docs/`: documentação do projeto e dos fluxos.
-- `templates/`: templates HTML do Django.
-- `static/`: arquivos estáticos servidos pela aplicação.
-- `Dockerfile`: imagem de produção para back-end e front-end.
-- `requirements.txt`: dependências Python do projeto.
-- `ruff.toml`: configuração de lint do Python.
+O modo `--check` não abre conexão nem grava no banco e não exibe host, nome, usuário, URI ou senha. A reexecução reconcilia somente os registros reservados do seed, mantendo identidades e contagens sem duplicação descontrolada. Nunca habilite o comando em produção, não grave a senha no repositório e remova as variáveis temporárias do terminal ao terminar. O passo a passo completo está em [docs/roteiro_homologacao.md](docs/roteiro_homologacao.md).
+
+---
+
+## Estrutura de Pastas
+
+- `backend/`: Código da API Django/DRF, configurações (`config/`), apps de domínio e `Dockerfile` do back-end.
+- `frontend/`: SPA em React 18 (Vite, Bootstrap), testes unitários/componentes (Vitest), testes E2E (Playwright) e `Dockerfile` do front-end.
+- `infra/`: Configurações de infraestrutura (Nginx `default.conf`, scripts de `entrypoint.sh`, pgAdmin e Docker Compose).
+- `docker-compose.yml`: Orquestração multi-contêiner principal do projeto.
+- `docs/`: Documentação de arquitetura, homologação e requisitos do projeto.
+- `requirements.txt`: Dependências Python pinadas para o back-end.
+
+---
+
+## Autoria e Desenvolvimento
+
+- **Autor e Desenvolvedor:** Caio Victor Nascimento ([@cocaioo](https://github.com/cocaioo))
+- **Nota de autoria e responsabilidade:** O projeto foi inicialmente planejado para ser realizado em dupla. Contudo, após o desligamento do colaborador Miguel no início do ciclo, **todo o desenvolvimento do sistema (100% do projeto) foi assumido e executado integralmente por Caio Victor**. Isso abrange:
+  - **Back-end & Regras de Negócio:** API REST com Django REST Framework, autenticação de sessão, controle de permissões por perfil de acesso (Usuário, Admin e Admin Master), máquina de estados das demandas, validações por item, devoluções com parecer, consolidação e emissão de DFDs.
+  - **Front-end & Interface:** SPA em React 18 com Vite e Bootstrap 5, cobrindo catálogo, formulários de demandas com cálculo dinâmico, telas de validação/devolução, reedição e reenvio de itens, módulo de consolidação e dashboard analítico com indicadores.
+  - **Banco de Dados & Infraestrutura:** Modelagem relacional em PostgreSQL, conteinerização com Docker e Docker Compose, pgAdmin 4 e rotinas de automação.
+  - **Testes, Qualidade & Segurança:** Testes automatizados no Django, testes unitários/componentes no frontend com Vitest, testes ponta a ponta (E2E) com Playwright, proteções contra CSRF e validações estritas de escopo.
+  - **Documentação Técnica & Seed de Dados:** Roteiros de homologação com travas de segurança (`seed_homologacao`), especificações didáticas da API e documentação de arquitetura.

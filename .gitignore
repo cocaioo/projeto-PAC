@@ -15,6 +15,11 @@ build/
 # Node.js
 node_modules/
 frontend/node_modules/
+frontend/.e2e/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.lighthouseci/
+frontend/lighthouse-reports/
 
 # Virtual environment
 venv/
@@ -28,12 +33,13 @@ env/
 .env.homologacao
 
 # Django
-db.sqlite3
-db.sqlite3-journal
-*.sqlite3*
 *.bak
+backend/staticfiles/
+backend/media/
 staticfiles/
 media/
+*.sqlite3
+db.sqlite3
 
 # IDEs
 .vscode/
