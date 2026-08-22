@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ApiErrorMessage from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
@@ -52,31 +52,58 @@ export default function DemandaForm() {
 
   if (carregando) return <LoadingState label="Carregando dados da demanda..." />;
 
+  const backUrl = editando ? `/demandas/${id}` : "/demandas";
+
   return (
     <div className="row justify-content-center">
       <div className="col-md-6">
-        <PageHeader eyebrow="Minhas demandas" title={editando ? "Editar demanda" : "Nova demanda"} />
+        <PageHeader
+          eyebrow="Minhas demandas"
+          title={editando ? "Editar demanda" : "Nova demanda"}
+          description="Informe o exercício de execução e observações gerais sobre a demanda da sua unidade."
+          actions={(
+            <Link to={backUrl} className="pac-button pac-button--secondary">
+              <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+              Voltar
+            </Link>
+          )}
+        />
 
         <ApiErrorMessage error={erro} title="Não foi possível salvar a demanda" />
 
-        <Card><form onSubmit={handleSubmit}>
-            <Input
-              id="ano"
-              type="number"
-              label="Ano de referência"
-              value={anoReferencia}
-              onChange={(e) => setAnoReferencia(e.target.value)}
-              required
-            />
-            <Textarea
-              id="obs"
-              label="Observação"
-              rows={3}
-              value={observacao}
-              onChange={(e) => setObservacao(e.target.value)}
-            />
-          <Button type="submit" loading={enviando}>Salvar</Button>
-        </form></Card>
+        <Card>
+          <form onSubmit={handleSubmit}>
+            <div className="mb-3">
+              <Input
+                id="ano"
+                type="number"
+                label="Ano de referência"
+                value={anoReferencia}
+                onChange={(e) => setAnoReferencia(e.target.value)}
+                required
+              />
+              <div className="form-text mt-1">
+                Exercício financeiro em que as aquisições e contratações serão executadas pela instituição.
+              </div>
+            </div>
+            <div className="mb-3">
+              <Textarea
+                id="obs"
+                label="Observação (opcional)"
+                rows={3}
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                placeholder="Observações complementares sobre a demanda da unidade"
+              />
+            </div>
+            <div className="d-flex gap-2">
+              <Button type="submit" loading={enviando}>Salvar</Button>
+              <Link to={backUrl} className="pac-button pac-button--secondary">
+                Cancelar
+              </Link>
+            </div>
+          </form>
+        </Card>
       </div>
     </div>
   );

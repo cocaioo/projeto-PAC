@@ -192,6 +192,93 @@ class DemandaTests(APITestCase):
         self.assertEqual(demanda.status, StatusDemanda.CANCELADA)
         self.assertTrue(all(i.status == StatusItemDemanda.CANCELADA for i in demanda.itens.all()))
 
+    def test_excluir_demanda_em_rascunho_pelo_dono_sucesso_204(self):
+        self.client.force_login(self.user)
+        demanda = Demanda.objects.create(
+            unidade=self.unidade, usuario=self.user, ano_referencia=2027,
+            status=StatusDemanda.RASCUNHO
+        )
+        ItemDemanda.objects.create(
+            demanda=demanda, tipo="material", nome="Item Excluir", quantidade=1,
+            valor_estimado=Decimal("50"), valor_total=Decimal("50"),
+            data_prevista=date(2027, 1, 1),
+        )
+        resp = self.client.delete(
+            reverse("api:demanda-detail", kwargs={"pk": demanda.pk})
+        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Demanda.objects.filter(pk=demanda.pk).exists())
+
+    def test_excluir_demanda_nao_rascunho_bloqueado_400(self):
+        self.client.force_login(self.user)
+        demanda = Demanda.objects.create(
+            unidade=self.unidade, usuario=self.user, ano_referencia=2027,
+            status=StatusDemanda.AGUARDANDO_VALIDACAO
+        )
+        resp = self.client.delete(
+            reverse("api:demanda-detail", kwargs={"pk": demanda.pk})
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Demanda.objects.filter(pk=demanda.pk).exists())
+
+    def test_excluir_demanda_por_outro_usuario_bloqueado_403(self):
+        outro_admin = criar_usuario(username="gestor_outro", is_staff=True, perfil="admin_master")
+        self.client.force_login(outro_admin)
+        demanda = Demanda.objects.create(
+            unidade=self.unidade, usuario=self.user, ano_referencia=2027,
+            status=StatusDemanda.RASCUNHO
+        )
+        resp = self.client.delete(
+            reverse("api:demanda-detail", kwargs={"pk": demanda.pk})
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Demanda.objects.filter(pk=demanda.pk).exists())
+
+    def test_serializacao_historico_na_demanda_e_item(self):
+        from apps.validacoes.models import TipoAcao
+        demanda = Demanda.objects.create(
+            unidade=self.unidade, usuario=self.user, ano_referencia=2027,
+            status=StatusDemanda.EM_ANDAMENTO, observacao="Demanda inicial de TI"
+        )
+        item = ItemDemanda.objects.create(
+            demanda=demanda, tipo="material", nome="Mouse Óptico", quantidade=3,
+            valor_estimado=Decimal("30"), valor_total=Decimal("90"),
+            data_prevista=date(2027, 2, 1), status=StatusItemDemanda.VALIDADA
+        )
+        admin_validador = criar_usuario(username="validador_test", is_staff=True, perfil="admin")
+        Validacao.objects.create(
+            item_demanda=item,
+            usuario=admin_validador,
+            acao=TipoAcao.VALIDADO,
+            comentario="Item de acordo com as especificações."
+        )
+
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse("api:demanda-detail", kwargs={"pk": demanda.pk}))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        # Verifica histórico consolidado na demanda
+        self.assertIn("historico", resp.data)
+        historico = resp.data["historico"]
+        self.assertGreaterEqual(len(historico), 2)  # Criação da demanda + validação do item
+
+        # Verifica se cada registro do histórico possui título, comentário, autor, data e ação
+        for entrada in historico:
+            self.assertIn("titulo", entrada)
+            self.assertIn("comentario", entrada)
+            self.assertIn("autor", entrada)
+            self.assertIn("data", entrada)
+            self.assertIn("acao", entrada)
+
+        # Verifica histórico de validações no item
+        self.assertIn("itens", resp.data)
+        self.assertEqual(len(resp.data["itens"]), 1)
+        item_data = resp.data["itens"][0]
+        self.assertIn("historico_validacoes", item_data)
+        self.assertEqual(len(item_data["historico_validacoes"]), 1)
+        self.assertEqual(item_data["historico_validacoes"][0]["comentario"], "Item de acordo com as especificações.")
+        self.assertEqual(item_data["historico_validacoes"][0]["acao"], TipoAcao.VALIDADO)
+
 
 # =============================================================================
 # Validações

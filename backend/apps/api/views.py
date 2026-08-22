@@ -272,9 +272,15 @@ class DemandaViewSet(viewsets.ModelViewSet):
             queryset=Validacao.objects.filter(acao=TipoAcao.DEVOLVIDO).select_related("usuario").order_by("-criado_em", "-id"),
             to_attr="devolucoes_prefetched"
         )
+        todas_validacoes_prefetch = Prefetch(
+            "validacoes",
+            queryset=Validacao.objects.select_related("usuario").order_by("-criado_em", "-id"),
+            to_attr="todas_validacoes_prefetched"
+        )
         itens_visiveis = itens_no_escopo_do_usuario(
             ItemDemanda.objects.select_related("dfd").prefetch_related(
-                ultima_devolucao_prefetch
+                ultima_devolucao_prefetch,
+                todas_validacoes_prefetch,
             ),
             user,
         )
@@ -328,6 +334,20 @@ class DemandaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        demanda = self.get_object()
+        if not self._pode_editar(demanda):
+            return Response(
+                {"detail": "Você não tem permissão para excluir esta demanda."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if demanda.status != StatusDemanda.RASCUNHO:
+            return Response(
+                {"detail": "Somente demandas em rascunho podem ser excluídas."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=["get", "post"])
     def itens(self, request, pk=None):

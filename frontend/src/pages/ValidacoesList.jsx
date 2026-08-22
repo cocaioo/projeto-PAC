@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import ApiErrorMessage from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
-import { Card, EmptyState, LoadingState, Select } from "../components/ui";
+import { Card, EmptyState, LoadingState, ProgressSummary, Select } from "../components/ui";
 
 export function resultadosDaApi(data) {
   if (Array.isArray(data)) return data;
@@ -125,6 +125,7 @@ export default function ValidacoesList() {
   }, [grupo, isAdmin, tentativa, unidade]);
 
   const demandas = useMemo(() => agruparItensPorDemanda(itens), [itens]);
+  const gruposEnvolvidos = useMemo(() => new Set(itens.map((item) => item.grupo_nome).filter(Boolean)).size, [itens]);
 
   if (!isAdmin) {
     return (
@@ -150,6 +151,16 @@ export default function ValidacoesList() {
         title="Demandas recebidas"
         description="Abra uma demanda para validar ou devolver cada item individualmente."
       />
+
+      {!carregando && !erro && (
+        <ProgressSummary
+          items={[
+            { label: "Demandas aguardando validação", value: demandas.length },
+            { label: "Itens aguardando análise", value: itens.length },
+            { label: "Grupos envolvidos", value: gruposEnvolvidos || "-" },
+          ]}
+        />
+      )}
 
       <Card title="Filtros" className="mb-4">
         <div className="row g-3">

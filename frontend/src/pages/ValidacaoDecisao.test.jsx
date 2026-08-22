@@ -101,22 +101,18 @@ describe("ValidacaoDecisao", () => {
     expect(screen.getByRole("button", { name: "Validar item Monitor" })).toBeInTheDocument();
   });
 
-  it("exige justificativa no modal de devolução", async () => {
+  it("exige justificativa válida no modal de devolução", async () => {
     const user = userEvent.setup();
     renderDecisao();
     await screen.findByText("Notebook");
 
     await user.click(screen.getByRole("button", { name: "Devolver item Notebook" }));
     const modal = screen.getByRole("dialog", { name: "Devolver item ao solicitante" });
-    await user.click(within(modal).getByRole("button", { name: "Confirmar devolução" }));
+    const confirmButton = within(modal).getByRole("button", { name: "Confirmar devolução" });
 
-    expect(
-      within(modal).getByText("Informe a justificativa para devolver o item.")
-    ).toBeInTheDocument();
-    expect(within(modal).getByLabelText(/justificativa da devolução/i)).toHaveAttribute(
-      "aria-invalid",
-      "true"
-    );
+    expect(confirmButton).toBeDisabled();
+    await user.type(within(modal).getByLabelText(/justificativa da devolução/i), "Corrigir descrição.");
+    expect(confirmButton).not.toBeDisabled();
     expect(api.decidirValidacao).not.toHaveBeenCalled();
   });
 

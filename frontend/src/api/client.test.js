@@ -157,4 +157,15 @@ describe("api client", () => {
     expect(url).toContain(`/catalogo/10/${action}/`);
     expect(options.method).toBe("POST");
   });
+
+  it("exclui demanda pelo endpoint DELETE", async () => {
+    global.fetch = mockFetch(204, null);
+
+    const result = await api.deleteDemanda(7);
+
+    const [url, options] = global.fetch.mock.calls[0];
+    expect(url).toContain("/demandas/7/");
+    expect(options.method).toBe("DELETE");
+    expect(result).toBeNull();
+  });
 });

@@ -149,6 +149,7 @@ export const api = {
   getDemanda: (id) => request(`/demandas/${id}/`),
   createDemanda: (body) => request("/demandas/", { method: "POST", body }),
   updateDemanda: (id, body) => request(`/demandas/${id}/`, { method: "PUT", body }),
+  deleteDemanda: (id) => request(`/demandas/${id}/`, { method: "DELETE" }),
   addItem: (demandaId, body) => request(`/demandas/${demandaId}/itens/`, { method: "POST", body }),
   getItem: (id) => request(`/itens/${id}/`),
   updateItem: (id, body) => request(`/itens/${id}/`, { method: "PATCH", body }),
