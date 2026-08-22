@@ -281,3 +281,101 @@ a { color: var(--pac-color-primary-700); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body,
+  #root,
+  .app-shell,
+  .app-main,
+  .app-content,
+  .app-content__inner {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    color: #000 !important;
+  }
+
+  .app-sidebar,
+  .pac-sidebar,
+  .app-header,
+  .skip-link,
+  .pac-action-bar,
+  nav,
+  aside,
+  button,
+  .pac-button,
+  .btn,
+  .page-header > div:last-child {
+    display: none !important;
+  }
+
+  .page-header {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .page-header__title {
+    font-size: 1.5rem !important;
+    color: #000 !important;
+  }
+
+  .pac-card {
+    border: 1px solid #dee2e6 !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    margin-bottom: 1.5rem !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .pac-card__header {
+    border-bottom: 1px solid #dee2e6 !important;
+    padding: 0.5rem 1rem !important;
+    background: #f8f9fa !important;
+  }
+
+  .pac-card__body {
+    padding: 1rem !important;
+  }
+
+  .pac-table-wrap {
+    overflow: visible !important;
+    border: 1px solid #dee2e6 !important;
+    box-shadow: none !important;
+  }
+
+  .pac-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .pac-table th,
+  .pac-table td {
+    border: 1px solid #dee2e6 !important;
+    padding: 0.5rem 0.75rem !important;
+    color: #000 !important;
+  }
+
+  .pac-table th {
+    background: #f8f9fa !important;
+    color: #000 !important;
+    font-weight: 700 !important;
+  }
+
+  dl dt,
+  dl dd {
+    color: #000 !important;
+  }
+}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ApiErrorMessage, { InlineMessage } from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
@@ -90,7 +90,7 @@ function buildHistory(demanda, itens) {
       id: event.id ?? `historico-${index}`,
       title: historyTitle(event),
       date: event.criado_em || event.ocorrido_em || event.data || event.atualizado_em,
-      detail: asText(event.comentario || event.detalhe || event.motivo).trim(),
+      detail: asText(event.comentario || event.detalhe || event.motivo || event.justificativa).trim(),
       responsible: getResponsibleName(
         event.responsavel || event.usuario || event.usuario_nome || event.responsavel_nome
       ),
@@ -126,12 +126,14 @@ function buildHistory(demanda, itens) {
 
 export default function DemandaDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [demanda, setDemanda] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState(null);
   const [erroAcao, setErroAcao] = useState(null);
   const [mensagem, setMensagem] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [reenviandoId, setReenviandoId] = useState(null);
   const [confirmacao, setConfirmacao] = useState(null);
 
@@ -167,6 +169,21 @@ export default function DemandaDetail() {
       setErroAcao(error);
     } finally {
       setEnviando(false);
+      setConfirmacao(null);
+    }
+  }
+
+  async function handleExcluir() {
+    setErroAcao(null);
+    setMensagem("");
+    setExcluindo(true);
+    try {
+      await api.deleteDemanda(id);
+      navigate("/demandas");
+    } catch (error) {
+      setErroAcao(error);
+    } finally {
+      setExcluindo(false);
       setConfirmacao(null);
     }
   }
@@ -229,13 +246,22 @@ export default function DemandaDetail() {
       </Link>
       <StatusBadge status={demanda.status} />
       {isDraft && (
-        <Link
-          to={`/demandas/${demanda.id}/editar`}
-          className="pac-button pac-button--secondary"
-        >
-          <i className="bi bi-pencil" aria-hidden="true" />
-          Editar demanda
-        </Link>
+        <>
+          <Link
+            to={`/demandas/${demanda.id}/editar`}
+            className="pac-button pac-button--secondary"
+          >
+            <i className="bi bi-pencil" aria-hidden="true" />
+            Editar demanda
+          </Link>
+          <Button
+            variant="danger"
+            onClick={() => setConfirmacao({ tipo: "excluir" })}
+          >
+            <i className="bi bi-trash" aria-hidden="true" />
+            Excluir rascunho
+          </Button>
+        </>
       )}
     </>
   );
@@ -457,19 +483,36 @@ export default function DemandaDetail() {
 
       <ConfirmDialog
         open={Boolean(confirmacao)}
-        title={confirmacao?.tipo === "enviar" ? "Enviar demanda" : "Reenviar item"}
-        confirmLabel={confirmacao?.tipo === "enviar" ? "Confirmar envio" : "Confirmar reenvio"}
-        confirmVariant="success"
-        loading={enviando || Boolean(reenviandoId)}
+        title={
+          confirmacao?.tipo === "enviar"
+            ? "Enviar demanda"
+            : confirmacao?.tipo === "excluir"
+              ? "Excluir rascunho"
+              : "Reenviar item"
+        }
+        confirmLabel={
+          confirmacao?.tipo === "enviar"
+            ? "Confirmar envio"
+            : confirmacao?.tipo === "excluir"
+              ? "Confirmar exclusão"
+              : "Confirmar reenvio"
+        }
+        confirmVariant={confirmacao?.tipo === "excluir" ? "danger" : "success"}
+        loading={enviando || Boolean(reenviandoId) || excluindo}
         onClose={() => setConfirmacao(null)}
         onConfirm={() => {
           if (confirmacao?.tipo === "enviar") handleEnviar();
           if (confirmacao?.tipo === "reenviar") handleReenviarItem(confirmacao.item.id);
+          if (confirmacao?.tipo === "excluir") handleExcluir();
         }}
       >
         {confirmacao?.tipo === "enviar" ? (
           <p className="mb-0">
             Confirma o envio desta demanda para validação? Depois do envio, o rascunho não poderá ser editado.
+          </p>
+        ) : confirmacao?.tipo === "excluir" ? (
+          <p className="mb-0">
+            Tem certeza que deseja excluir esta demanda em rascunho? Esta ação não pode ser desfeita.
           </p>
         ) : (
           <p className="mb-0">
