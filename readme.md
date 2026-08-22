@@ -196,7 +196,7 @@ python manage.py seed_homologacao --check
 python manage.py seed_homologacao --apply --confirm-target <fingerprint>
 ```
 
-O modo `--check` não abre conexão nem grava no banco e não exibe host, nome, usuário, URI ou senha. A reexecução reconcilia somente os registros reservados do seed, mantendo identidades e contagens sem duplicação descontrolada. Nunca habilite o comando em produção, não grave a senha no repositório e remova as variáveis temporárias do terminal ao terminar. O passo a passo completo está em [docs/roteiro_homologacao.md](docs/roteiro_homologacao.md).
+O modo `--check` não abre conexão nem grava no banco e não exibe host, nome, usuário, URI ou senha. A reexecução reconcilia somente os registros reservados do seed, mantendo identidades e contagens sem duplicação descontrolada. Nunca habilite o comando em produção, não grave a senha no repositório e remova as variáveis temporárias do terminal ao terminar. O passo a passo completo está em [docs/roteiro_homologacao.md](docs/roteiro_homologacao.md), e a lista consolidada de usuários e senhas para testes locais e E2E está disponível em [CREDENCIAIS.md](CREDENCIAIS.md).
 
 ---
 
