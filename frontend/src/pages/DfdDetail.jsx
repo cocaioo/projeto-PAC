@@ -35,7 +35,12 @@ export default function DfdDetail() {
       <PageHeader
         eyebrow="Documentos de formalização"
         title={`DFD ${dfd.numero}`}
-        actions={<Link to="/dfds" className="pac-button pac-button--secondary">Voltar</Link>}
+        actions={(
+          <Link to="/dfds" className="pac-button pac-button--secondary">
+            <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+            Voltar para DFDs
+          </Link>
+        )}
       />
 
       <Card title="Dados do DFD" className="mb-4"><dl className="row mb-0">

@@ -220,8 +220,13 @@ export default function DemandaDetail() {
     },
     { label: "Envie a demanda para validação", done: demanda.status !== "rascunho" },
   ];
+
   const headerActions = (
     <>
+      <Link to="/demandas" className="pac-button pac-button--secondary">
+        <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+        Voltar para demandas
+      </Link>
       <StatusBadge status={demanda.status} />
       {isDraft && (
         <Link

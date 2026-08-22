@@ -299,6 +299,12 @@ export default function DfdConsolidar() {
         eyebrow="Administração"
         title="Consolidação e vínculo de DFD"
         description="Agrupe itens validados do mesmo grupo e vincule o número do DFD sem sair desta tela."
+        actions={(
+          <Link to="/dfds" className="pac-button pac-button--secondary">
+            <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+            Voltar para DFDs
+          </Link>
+        )}
       />
 
       {resultado && (
