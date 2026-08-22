@@ -194,6 +194,22 @@ LOGOUT_REDIRECT_URL = '/login/'
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
 
+AUTHENTICATION_BACKENDS = [
+    'apps.usuarios.backends.SipacAuthBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# =============================================================================
+# Integração SIPAC
+# =============================================================================
+
+SIPAC_AUTH_ENABLED = config('SIPAC_AUTH_ENABLED', default=False, cast=bool)
+SIPAC_API_BASE_URL = config('SIPAC_API_BASE_URL', default='https://sipac.ufpi.br/api')
+SIPAC_CLIENT_ID = config('SIPAC_CLIENT_ID', default='')
+SIPAC_CLIENT_SECRET = config('SIPAC_CLIENT_SECRET', default='')
+SIPAC_TIMEOUT_SECONDS = config('SIPAC_TIMEOUT_SECONDS', default=10, cast=int)
+
+
 
 # =============================================================================
 # Configurações gerais
