@@ -20,6 +20,7 @@ env:
   PYTHONUNBUFFERED: "1"
   # Chave apenas para o ambiente de CI — não usada em produção.
   SECRET_KEY: "ci-insecure-test-key-not-for-production"
+  DATABASE_URL: "sqlite:///db.sqlite3"
   DEBUG: "False"
   ALLOWED_HOSTS: "localhost,127.0.0.1"
 

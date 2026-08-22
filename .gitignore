@@ -38,6 +38,8 @@ backend/staticfiles/
 backend/media/
 staticfiles/
 media/
+*.sqlite3
+db.sqlite3
 
 # IDEs
 .vscode/
