@@ -19,7 +19,7 @@ services:
 
   backend:
     build:
-      context: ..
+      context: .
       dockerfile: backend/Dockerfile
     container_name: pac_backend
     restart: unless-stopped
@@ -27,7 +27,7 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - ../.env
+      - .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-pac_user}:${POSTGRES_PASSWORD:-pac_password}@db:5432/${POSTGRES_DB:-pac_db}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-unsafe-development-key}
@@ -46,7 +46,7 @@ services:
 
   frontend:
     build:
-      context: ..
+      context: .
       dockerfile: frontend/Dockerfile
     container_name: pac_frontend
     restart: unless-stopped
@@ -73,7 +73,7 @@ services:
       - "${PGADMIN_PORT:-5050}:80"
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
     networks:
       - pac_network
 

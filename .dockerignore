@@ -7,33 +7,36 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 .venv/
 venv/
 env/
+.ruff_cache/
 
 # Ambiente e segredos
 .env
-.env.example
+.env.local
 
-# Arquivos gerados
+# Arquivos gerados em runtime local
 backend/staticfiles/
 backend/media/
 staticfiles/
 media/
 
-# Docker / dev
-infra/
-Dockerfile
-.dockerignore
-
-# Front-end: dependências e build (reconstruídos na imagem)
+# Front-end: dependências, relatórios e builds locais
 frontend/node_modules/
 frontend/dist/
 frontend/coverage/
+frontend/.lighthouseci/
+frontend/lighthouse-reports/
+frontend/test-results/
+frontend/playwright-report/
+node_modules/
 
-# Documentação e IDEs
+# Documentação, testes E2E pesados e IDEs
 docs/
 .vscode/
 .idea/
 .claude/
+*.md
