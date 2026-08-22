@@ -138,6 +138,8 @@ test.describe("MVP PAC", () => {
     await loginAs(page, USERS.usuario);
     await page.goto("/catalogo");
     await expect(page.getByRole("heading", { name: /Cat.logo de itens/i })).toBeVisible();
+    const search = page.getByLabel(/Pesquisar por nome ou c.digo/i);
+    await search.fill(CATALOG_ITEM);
     await expect(page.getByText(CATALOG_ITEM, { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Cadastrar item/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Editar$/i })).toHaveCount(0);
