@@ -2,13 +2,13 @@ name: CI
 
 # Integração Contínua do PAC UFPI.
 # Executa lint, verificações do Django, checagem de migrações e testes
-# a cada push e pull request para as branches principais.
+# a cada push e pull request para as branches dev e master (prod), além de main/develop.
 
 on:
   push:
-    branches: [main, develop]
+    branches: [master, dev, main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [master, dev, main, develop]
   workflow_dispatch:
 
 # Cancela execuções anteriores da mesma ref ainda em andamento.
