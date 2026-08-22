@@ -2,10 +2,11 @@
 set -e
 
 # =============================================================================
-# PAC UFPI — Script de entrada do contêiner
+# PAC UFPI — Script de entrada do contêiner de Back-end
 # 1. Aguarda a disponibilidade do banco de dados (se configurado)
 # 2. Executa as migrações automáticas do Django
-# 3. Inicia o comando principal (Gunicorn por padrão)
+# 3. Coleta os arquivos estáticos do Django/Admin
+# 4. Inicia o comando principal (Gunicorn por padrão)
 # =============================================================================
 
 # Verifica conexão com o banco de dados remoto
@@ -40,6 +41,9 @@ EOF
 
 echo "[entrypoint] Aplicando migrações do banco de dados..."
 python manage.py migrate --noinput
+
+echo "[entrypoint] Coletando arquivos estáticos do Django..."
+python manage.py collectstatic --noinput --clear
 
 echo "[entrypoint] Inicializando processo da aplicação..."
 exec "$@"
