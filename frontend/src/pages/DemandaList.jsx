@@ -4,8 +4,9 @@ import { api } from "../api/client";
 import ApiErrorMessage from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
-import { EmptyState, LoadingState, Table } from "../components/ui";
+import { EmptyState, LoadingState, NextAction, Table } from "../components/ui";
 import { formatCurrency } from "../utils/format";
+import { getDemandNextAction } from "../utils/nextActions";
 
 function resultsFrom(data) {
   if (Array.isArray(data)) return data;
@@ -54,7 +55,7 @@ export default function DemandaList() {
       <PageHeader
         eyebrow="Planejamento e contratações"
         title="Minhas demandas"
-        description="Acompanhe a situação das suas solicitações e consulte o andamento de cada item."
+        description="Acompanhe a situação das suas solicitações e veja a próxima ação de cada uma."
         actions={newDemandLink}
       />
 
@@ -87,31 +88,40 @@ export default function DemandaList() {
               <th scope="col">Ano</th>
               <th scope="col">Status</th>
               <th scope="col">Valor total</th>
+              <th scope="col">Próxima ação</th>
               <th scope="col" className="text-end">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {demandas.map((demanda) => (
-              <tr key={demanda.id}>
-                <td className="fw-semibold">#{demanda.id}</td>
-                <td>{demanda.unidade_sigla || "—"}</td>
-                <td>{demanda.ano_referencia}</td>
-                <td>
-                  <StatusBadge status={demanda.status} />
-                </td>
-                <td>{formatCurrency(demanda.valor_total)}</td>
-                <td className="text-end">
-                  <Link
-                    to={`/demandas/${demanda.id}`}
-                    className="pac-button pac-button--secondary pac-button--sm"
-                    aria-label={`Acompanhar demanda ${demanda.id}`}
-                  >
-                    Acompanhar
-                    <i className="bi bi-chevron-right" aria-hidden="true" />
-                  </Link>
-                </td>
-              </tr>
-            ))}
+            {demandas.map((demanda) => {
+              const nextAction = getDemandNextAction(demanda);
+              return (
+                <tr key={demanda.id} className="pac-table__row-link">
+                  <td className="fw-semibold">
+                    <Link to={`/demandas/${demanda.id}`}>
+                      #{demanda.id}
+                    </Link>
+                  </td>
+                  <td>{demanda.unidade_sigla || "-"}</td>
+                  <td>{demanda.ano_referencia}</td>
+                  <td>
+                    <StatusBadge status={demanda.status} />
+                  </td>
+                  <td>{formatCurrency(demanda.valor_total)}</td>
+                  <td><NextAction action={nextAction} compact /></td>
+                  <td className="text-end">
+                    <Link
+                      to={`/demandas/${demanda.id}`}
+                      className="pac-button pac-button--secondary pac-button--sm"
+                      aria-label={`Acompanhar demanda ${demanda.id}`}
+                    >
+                      Acompanhar
+                      <i className="bi bi-chevron-right" aria-hidden="true" />
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </Table>
       )}

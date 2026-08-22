@@ -4,8 +4,20 @@ import { api } from "../api/client";
 import ApiErrorMessage, { InlineMessage } from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
-import { Button, Card, ConfirmDialog, EmptyState, LoadingState, Table } from "../components/ui";
+import {
+  ActionBar,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingState,
+  NextAction,
+  ProgressSummary,
+  Table,
+  TaskChecklist,
+} from "../components/ui";
 import { formatCurrency } from "../utils/format";
+import { getDemandNextAction, getItemNextAction } from "../utils/nextActions";
 import { getStatusConfig } from "../utils/statusConfig";
 
 const CLOSED_DEMAND_STATUSES = new Set(["concluida", "cancelada"]);
@@ -197,6 +209,17 @@ export default function DemandaDetail() {
   if (!demanda) return null;
 
   const isDraft = canEditDemand(demanda);
+  const nextAction = getDemandNextAction(demanda);
+  const checklistItems = [
+    { label: "Adicione ao menos um item", done: itens.length > 0 },
+    {
+      label: "Revise quantidades e valores",
+      done: itens.length > 0 && itens.every((item) => (
+        Number(item.quantidade) > 0 && Number(item.valor_estimado) > 0
+      )),
+    },
+    { label: "Envie a demanda para validação", done: demanda.status !== "rascunho" },
+  ];
   const headerActions = (
     <>
       <StatusBadge status={demanda.status} />
@@ -231,6 +254,21 @@ export default function DemandaDetail() {
         title="Não foi possível atualizar a demanda"
       />
 
+      <ProgressSummary
+        items={[
+          { label: "Status", value: <StatusBadge status={demanda.status} /> },
+          { label: "Itens", value: itens.length },
+          { label: "Valor total", value: formatCurrency(demanda.valor_total) },
+          { label: "Próxima ação", value: <NextAction action={nextAction} /> },
+        ]}
+      />
+
+      {isDraft && (
+        <div className="mb-4">
+          <TaskChecklist items={checklistItems} />
+        </div>
+      )}
+
       <Card title="Dados da demanda" className="mb-4">
         <dl className="row mb-0">
           <dt className="col-sm-3">Unidade</dt>
@@ -261,7 +299,7 @@ export default function DemandaDetail() {
           </Link>
         ) : null}
         footer={isDraft && itens.length > 0 ? (
-          <div className="d-flex justify-content-end">
+          <ActionBar summary="Rascunho pronto para envio quando os itens estiverem revisados.">
             <Button
               variant="success"
               loading={enviando}
@@ -270,7 +308,7 @@ export default function DemandaDetail() {
               <i className="bi bi-send" aria-hidden="true" />
               {enviando ? "Enviando..." : "Enviar para validação"}
             </Button>
-          </div>
+          </ActionBar>
         ) : null}
       >
         {itens.length === 0 ? (
@@ -290,6 +328,7 @@ export default function DemandaDetail() {
                 <th scope="col">Valor unit.</th>
                 <th scope="col">Valor total</th>
                 <th scope="col">Status</th>
+                <th scope="col">Próxima ação</th>
                 <th scope="col">DFD</th>
                 <th scope="col" className="text-end">Ações</th>
               </tr>
@@ -301,6 +340,7 @@ export default function DemandaDetail() {
                 const dfdNumber = getDfdNumber(item);
                 const editable = canEditItem(demanda, item);
                 const resubmittable = canResubmitItem(demanda, item);
+                const itemNextAction = getItemNextAction(item, demanda);
 
                 return (
                   <tr key={item.id}>
@@ -334,6 +374,7 @@ export default function DemandaDetail() {
                     <td>{formatCurrency(item.valor_estimado)}</td>
                     <td>{formatCurrency(item.valor_total)}</td>
                     <td><StatusBadge status={item.status} /></td>
+                    <td><NextAction action={itemNextAction} compact /></td>
                     <td>
                       {dfdNumber ? (
                         <span className="fw-semibold" aria-label={`DFD ${dfdNumber}`}>
@@ -379,7 +420,7 @@ export default function DemandaDetail() {
               <tr>
                 <th colSpan={3} className="text-end">Total</th>
                 <th>{formatCurrency(demanda.valor_total)}</th>
-                <th colSpan={3} />
+                <th colSpan={4} />
               </tr>
             </tfoot>
           </Table>

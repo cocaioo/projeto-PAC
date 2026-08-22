@@ -82,6 +82,13 @@ export default function Catalogo() {
   const itensVisiveis = isAdmin ? itens : itens.filter((item) => item.ativo !== false);
   const filtrosAplicados = Boolean(buscaDebounced.trim() || grupo || (isAdmin && ativo !== ""));
 
+  function limparFiltros() {
+    setBusca("");
+    setGrupo("");
+    setAtivo("");
+    setPagina(1);
+  }
+
   function updateFilter(setter) {
     return (event) => {
       setter(event.target.value);
@@ -154,7 +161,16 @@ export default function Catalogo() {
 
       {mensagem && <InlineMessage variant="success" onDismiss={() => setMensagem("")}>{mensagem}</InlineMessage>}
 
-      <Card title="Filtros" className="mb-4">
+      <Card
+        title="Buscar no catálogo"
+        className="mb-4"
+        actions={filtrosAplicados && (
+          <Button variant="ghost" size="sm" onClick={limparFiltros}>
+            <i className="bi bi-x-circle" aria-hidden="true" />
+            Limpar filtros
+          </Button>
+        )}
+      >
         <div className={`catalogo-filtros${isAdmin ? " catalogo-filtros--admin" : ""}`}>
           <Input id="catalogo-busca" label="Pesquisar por nome ou código" type="search" value={busca} onChange={updateFilter(setBusca)} placeholder="Ex.: computador ou CATMAT 451406" />
           <Select id="catalogo-grupo" label="Grupo" value={grupo} onChange={updateFilter(setGrupo)}>
@@ -177,6 +193,16 @@ export default function Catalogo() {
         <EmptyState icon="bi-search" title="Nenhum item encontrado" description={filtrosAplicados ? "Tente ajustar os termos ou filtros da pesquisa." : "Ainda não há itens disponíveis no catálogo."} />
       ) : (
         <>
+          <div className="d-flex justify-content-between align-items-center mb-3" aria-live="polite">
+            <strong>
+              {paginacao?.count ?? itensVisiveis.length} {(paginacao?.count ?? itensVisiveis.length) === 1 ? "resultado" : "resultados"}
+            </strong>
+            {filtrosAplicados && (
+              <Button variant="link" size="sm" onClick={limparFiltros}>
+                Limpar filtros
+              </Button>
+            )}
+          </div>
           <Table caption="Itens encontrados no catálogo">
             <thead><tr>
               <th scope="col">Código</th><th scope="col">Nome</th><th scope="col">Tipo</th><th scope="col">Grupo</th><th scope="col">Unidade</th><th scope="col">Valor estimado</th>

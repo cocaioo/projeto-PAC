@@ -321,6 +321,7 @@ export default function ValidacaoDecisao() {
               variant="danger"
               loading={decidindoId === itemParaDevolver?.id}
               onClick={confirmarDevolucao}
+              disabled={Boolean(decidindoId) || !comentario.trim()}
             >
               Confirmar devolução
             </Button>
