@@ -13,6 +13,7 @@ import {
   Input,
   LoadingState,
   Modal,
+  ProgressSummary,
   Select,
   Table,
 } from "../components/ui";
@@ -298,6 +299,12 @@ export default function DfdConsolidar() {
         eyebrow="Administração"
         title="Consolidação e vínculo de DFD"
         description="Agrupe itens validados do mesmo grupo e vincule o número do DFD sem sair desta tela."
+        actions={(
+          <Link to="/dfds" className="pac-button pac-button--secondary">
+            <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+            Voltar para DFDs
+          </Link>
+        )}
       />
 
       {resultado && (
@@ -350,6 +357,13 @@ export default function DfdConsolidar() {
 
       {ciclos.length > 0 && (
         <form onSubmit={handleSubmit} noValidate>
+          <ProgressSummary
+            items={[
+              { label: "Etapa 1", value: "Selecionar itens" },
+              { label: "Selecionados", value: `${itemIdsSelecionados.length} itens` },
+              { label: "Valor total", value: formatCurrency(valorSelecionado) },
+            ]}
+          />
           <Card
             title="Vínculo do DFD"
             className="mb-4"

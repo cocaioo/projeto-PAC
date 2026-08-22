@@ -76,6 +76,25 @@ class ItemCatalogoSerializer(serializers.ModelSerializer):
 
 
 # =============================================================================
+# Validações
+# =============================================================================
+
+class ValidacaoSerializer(serializers.ModelSerializer):
+    usuario_nome = serializers.CharField(
+        source="usuario.get_full_name", read_only=True
+    )
+    acao_display = serializers.CharField(source="get_acao_display", read_only=True)
+
+    class Meta:
+        model = Validacao
+        fields = [
+            "id", "item_demanda", "usuario", "usuario_nome",
+            "acao", "acao_display", "comentario", "criado_em",
+        ]
+        read_only_fields = ["usuario"]
+
+
+# =============================================================================
 # Demandas e itens
 # =============================================================================
 
@@ -100,6 +119,7 @@ class ItemDemandaSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     justificativa_devolucao = serializers.SerializerMethodField()
     ultima_devolucao = serializers.SerializerMethodField()
+    historico_validacoes = serializers.SerializerMethodField()
     dfd = DFDResumoSerializer(read_only=True)
 
     class Meta:
@@ -110,6 +130,7 @@ class ItemDemandaSerializer(serializers.ModelSerializer):
             "data_prevista", "prioridade", "justificativa_prioridade",
             "justificativa_necessidade", "indicacao_orcamentaria", "observacoes",
             "status", "status_display", "dfd", "justificativa_devolucao", "ultima_devolucao",
+            "historico_validacoes",
         ]
         read_only_fields = ["demanda", "status"]
         extra_kwargs = {
@@ -177,13 +198,19 @@ class ItemDemandaSerializer(serializers.ModelSerializer):
         if devolucoes is not None:
             val = devolucoes[0] if devolucoes else None
         else:
-            from apps.validacoes.models import TipoAcao
-            val = (
-                obj.validacoes.filter(acao=TipoAcao.DEVOLVIDO)
-                .select_related("usuario")
-                .order_by("-criado_em", "-id")
-                .first()
-            )
+            todas = getattr(obj, "todas_validacoes_prefetched", None)
+            if todas is not None:
+                from apps.validacoes.models import TipoAcao
+                devs = [v for v in todas if v.acao == TipoAcao.DEVOLVIDO]
+                val = devs[0] if devs else None
+            else:
+                from apps.validacoes.models import TipoAcao
+                val = (
+                    obj.validacoes.filter(acao=TipoAcao.DEVOLVIDO)
+                    .select_related("usuario")
+                    .order_by("-criado_em", "-id")
+                    .first()
+                )
         if not val:
             return None
         return {
@@ -199,6 +226,21 @@ class ItemDemandaSerializer(serializers.ModelSerializer):
     def get_justificativa_devolucao(self, obj):
         val_data = self.get_ultima_devolucao(obj)
         return val_data["comentario"] if val_data else ""
+
+    def get_historico_validacoes(self, obj):
+        validacoes = getattr(obj, "todas_validacoes_prefetched", None)
+        if validacoes is not None:
+            return ValidacaoSerializer(validacoes, many=True).data
+
+        devolucoes = getattr(obj, "devolucoes_prefetched", None)
+        if devolucoes is not None:
+            return ValidacaoSerializer(devolucoes, many=True).data
+
+        if hasattr(obj, "_prefetched_objects_cache") and "validacoes" in obj._prefetched_objects_cache:
+            return ValidacaoSerializer(obj.validacoes.all(), many=True).data
+
+        validacoes = obj.validacoes.select_related("usuario").order_by("-criado_em", "-id")
+        return ValidacaoSerializer(validacoes, many=True).data
 
     def create(self, validated_data):
         validated_data["valor_total"] = (
@@ -289,6 +331,7 @@ class DemandaSerializer(serializers.ModelSerializer):
     usuario_nome = serializers.CharField(source="usuario.get_full_name", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     valor_total = serializers.SerializerMethodField()
+    historico = serializers.SerializerMethodField()
 
     class Meta:
         model = Demanda
@@ -296,30 +339,55 @@ class DemandaSerializer(serializers.ModelSerializer):
             "id", "unidade", "unidade_sigla", "usuario", "usuario_nome",
             "ano_referencia", "status", "status_display", "observacao",
             "enviada_em", "criado_em", "atualizado_em", "itens", "valor_total",
+            "historico",
         ]
         read_only_fields = ["unidade", "usuario", "status", "enviada_em"]
 
     def get_valor_total(self, obj):
         return sum((item.valor_total for item in obj.itens.all()), start=0)
 
+    def get_historico(self, obj):
+        eventos = []
 
-# =============================================================================
-# Validações
-# =============================================================================
+        # Movimentação: Criação da demanda
+        if obj.criado_em:
+            autor_nome = (obj.usuario.get_full_name() or obj.usuario.username) if obj.usuario else ""
+            eventos.append({
+                "titulo": f"Demanda #{obj.pk} criada",
+                "comentario": obj.observacao or "",
+                "autor": autor_nome,
+                "data": obj.criado_em,
+                "acao": "criada",
+            })
 
-class ValidacaoSerializer(serializers.ModelSerializer):
-    usuario_nome = serializers.CharField(
-        source="usuario.get_full_name", read_only=True
-    )
-    acao_display = serializers.CharField(source="get_acao_display", read_only=True)
+        # Movimentação: Envio da demanda
+        if obj.enviada_em:
+            autor_nome = (obj.usuario.get_full_name() or obj.usuario.username) if obj.usuario else ""
+            eventos.append({
+                "titulo": f"Demanda #{obj.pk} enviada para validação",
+                "comentario": "",
+                "autor": autor_nome,
+                "data": obj.enviada_em,
+                "acao": "enviada",
+            })
 
-    class Meta:
-        model = Validacao
-        fields = [
-            "id", "item_demanda", "usuario", "usuario_nome",
-            "acao", "acao_display", "comentario", "criado_em",
-        ]
-        read_only_fields = ["usuario"]
+        # Validações dos itens
+        for item in obj.itens.all():
+            validacoes = getattr(item, "todas_validacoes_prefetched", None)
+            if validacoes is None:
+                validacoes = item.validacoes.select_related("usuario").order_by("-criado_em", "-id")
+            for val in validacoes:
+                autor_val = (val.usuario.get_full_name() or val.usuario.username) if val.usuario else ""
+                eventos.append({
+                    "titulo": f"Item: {item.nome}",
+                    "comentario": val.comentario or "",
+                    "autor": autor_val,
+                    "data": val.criado_em,
+                    "acao": val.acao,
+                })
+
+        eventos.sort(key=lambda x: x["data"], reverse=True)
+        return eventos
 
 
 # =============================================================================

@@ -312,6 +312,7 @@ export function NavLink({ to, className, children, end, onClick, ...props }) {
     {
       to,
       className: resolvedClassName || undefined,
+      "aria-current": isActive ? "page" : undefined,
       onClick,
       ...props,
     },

@@ -9,7 +9,12 @@ vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    api: { getDemanda: vi.fn(), enviarDemanda: vi.fn(), reenviarItem: vi.fn() },
+    api: {
+      getDemanda: vi.fn(),
+      enviarDemanda: vi.fn(),
+      reenviarItem: vi.fn(),
+      deleteDemanda: vi.fn(),
+    },
   };
 });
 
@@ -403,6 +408,103 @@ describe("DemandaDetail", () => {
     expect(await screen.findByText(/item reenviado para valida/i)).toBeInTheDocument();
     await waitFor(() => expect(api.getDemanda).toHaveBeenCalledTimes(2));
     expect(screen.getAllByText(/aguardando valida/i).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("exibe botão 'Excluir rascunho' apenas quando a demanda estiver em rascunho", async () => {
+    api.getDemanda.mockResolvedValue(demandaRascunho);
+    renderDetail();
+    expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /excluir rascunho/i })).toBeInTheDocument();
+  });
+
+  it("não exibe botão 'Excluir rascunho' quando a demanda não estiver em rascunho", async () => {
+    api.getDemanda.mockResolvedValue(demandaDevolvida);
+    renderDetail();
+    expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /excluir rascunho/i })).not.toBeInTheDocument();
+  });
+
+  it("exclui o rascunho após confirmação no diálogo e navega para /demandas", async () => {
+    api.getDemanda.mockResolvedValue(demandaRascunho);
+    api.deleteDemanda.mockResolvedValue(null);
+
+    renderDetail();
+    expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
+
+    const btnExcluir = screen.getByRole("button", { name: /excluir rascunho/i });
+    await userEvent.click(btnExcluir);
+
+    // Dialog appears with confirmation message
+    expect(
+      screen.getByText(/tem certeza que deseja excluir esta demanda em rascunho\? esta ação não pode ser desfeita\./i)
+    ).toBeInTheDocument();
+
+    expect(api.deleteDemanda).not.toHaveBeenCalled();
+
+    const btnConfirmar = screen.getByRole("button", { name: /confirmar exclusão/i });
+    await userEvent.click(btnConfirmar);
+
+    await waitFor(() => {
+      expect(api.deleteDemanda).toHaveBeenCalledWith("7");
+    });
+  });
+
+  it("exibe erro quando a exclusão do rascunho falha na API", async () => {
+    api.getDemanda.mockResolvedValue(demandaRascunho);
+    api.deleteDemanda.mockRejectedValue(new ApiError("Não foi possível excluir a demanda.", 400));
+
+    renderDetail();
+    expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /excluir rascunho/i }));
+    await userEvent.click(screen.getByRole("button", { name: /confirmar exclusão/i }));
+
+    expect(await screen.findByText(/não foi possível excluir a demanda\./i)).toBeInTheDocument();
+  });
+
+  it("renderiza todos os eventos de histórico detalhado da API", async () => {
+    api.getDemanda.mockResolvedValue({
+      ...demandaDevolvida,
+      historico: [
+        {
+          id: 101,
+          titulo: "Demanda criada",
+          data: "2026-08-10T10:00:00Z",
+          usuario_nome: "Ana Silva",
+        },
+        {
+          id: 102,
+          acao_display: "Enviada para validação",
+          data: "2026-08-11T12:00:00Z",
+          responsavel: { nome: "Ana Silva" },
+        },
+        {
+          id: 103,
+          titulo: "Item devolvido",
+          detalhe: "Especificações insuficientes",
+          data: "2026-08-12T14:00:00Z",
+          responsavel_nome: "Carlos Admin",
+        },
+        {
+          id: 104,
+          titulo: "Item validado",
+          comentario: "Aprovado conforme parecer",
+          data: "2026-08-13T16:00:00Z",
+          usuario: { nome: "Carlos Admin" },
+        },
+      ],
+    });
+
+    renderDetail();
+    expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
+
+    expect(screen.getByText("Demanda criada")).toBeInTheDocument();
+    expect(screen.getByText("Enviada para validação")).toBeInTheDocument();
+    expect(screen.getByText("Item devolvido")).toBeInTheDocument();
+    expect(screen.getByText("Especificações insuficientes")).toBeInTheDocument();
+    expect(screen.getByText("Item validado")).toBeInTheDocument();
+    expect(screen.getByText("Aprovado conforme parecer")).toBeInTheDocument();
+    expect(screen.getAllByText(/responsável: carlos admin/i).length).toBeGreaterThanOrEqual(2);
   });
 });
 

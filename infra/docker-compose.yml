@@ -3,6 +3,8 @@ services:
     image: postgres:16-alpine
     container_name: pac_postgres
     restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-pac_db}
       POSTGRES_USER: ${POSTGRES_USER:-pac_user}

@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ApiErrorMessage, { InlineMessage } from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
-import { Button, Card, ConfirmDialog, EmptyState, LoadingState, Table } from "../components/ui";
+import {
+  ActionBar,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingState,
+  NextAction,
+  ProgressSummary,
+  Table,
+  TaskChecklist,
+} from "../components/ui";
 import { formatCurrency } from "../utils/format";
+import { getDemandNextAction, getItemNextAction } from "../utils/nextActions";
 import { getStatusConfig } from "../utils/statusConfig";
 
 const CLOSED_DEMAND_STATUSES = new Set(["concluida", "cancelada"]);
@@ -78,7 +90,7 @@ function buildHistory(demanda, itens) {
       id: event.id ?? `historico-${index}`,
       title: historyTitle(event),
       date: event.criado_em || event.ocorrido_em || event.data || event.atualizado_em,
-      detail: asText(event.comentario || event.detalhe || event.motivo).trim(),
+      detail: asText(event.comentario || event.detalhe || event.motivo || event.justificativa).trim(),
       responsible: getResponsibleName(
         event.responsavel || event.usuario || event.usuario_nome || event.responsavel_nome
       ),
@@ -114,12 +126,14 @@ function buildHistory(demanda, itens) {
 
 export default function DemandaDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [demanda, setDemanda] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState(null);
   const [erroAcao, setErroAcao] = useState(null);
   const [mensagem, setMensagem] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [reenviandoId, setReenviandoId] = useState(null);
   const [confirmacao, setConfirmacao] = useState(null);
 
@@ -155,6 +169,21 @@ export default function DemandaDetail() {
       setErroAcao(error);
     } finally {
       setEnviando(false);
+      setConfirmacao(null);
+    }
+  }
+
+  async function handleExcluir() {
+    setErroAcao(null);
+    setMensagem("");
+    setExcluindo(true);
+    try {
+      await api.deleteDemanda(id);
+      navigate("/demandas");
+    } catch (error) {
+      setErroAcao(error);
+    } finally {
+      setExcluindo(false);
       setConfirmacao(null);
     }
   }
@@ -197,17 +226,42 @@ export default function DemandaDetail() {
   if (!demanda) return null;
 
   const isDraft = canEditDemand(demanda);
+  const nextAction = getDemandNextAction(demanda);
+  const checklistItems = [
+    { label: "Adicione ao menos um item", done: itens.length > 0 },
+    {
+      label: "Revise quantidades e valores",
+      done: itens.length > 0 && itens.every((item) => (
+        Number(item.quantidade) > 0 && Number(item.valor_estimado) > 0
+      )),
+    },
+    { label: "Envie a demanda para validação", done: demanda.status !== "rascunho" },
+  ];
+
   const headerActions = (
     <>
+      <Link to="/demandas" className="pac-button pac-button--secondary">
+        <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+        Voltar para demandas
+      </Link>
       <StatusBadge status={demanda.status} />
       {isDraft && (
-        <Link
-          to={`/demandas/${demanda.id}/editar`}
-          className="pac-button pac-button--secondary"
-        >
-          <i className="bi bi-pencil" aria-hidden="true" />
-          Editar demanda
-        </Link>
+        <>
+          <Link
+            to={`/demandas/${demanda.id}/editar`}
+            className="pac-button pac-button--secondary"
+          >
+            <i className="bi bi-pencil" aria-hidden="true" />
+            Editar demanda
+          </Link>
+          <Button
+            variant="danger"
+            onClick={() => setConfirmacao({ tipo: "excluir" })}
+          >
+            <i className="bi bi-trash" aria-hidden="true" />
+            Excluir rascunho
+          </Button>
+        </>
       )}
     </>
   );
@@ -230,6 +284,21 @@ export default function DemandaDetail() {
         error={erroAcao}
         title="Não foi possível atualizar a demanda"
       />
+
+      <ProgressSummary
+        items={[
+          { label: "Status", value: <StatusBadge status={demanda.status} /> },
+          { label: "Itens", value: itens.length },
+          { label: "Valor total", value: formatCurrency(demanda.valor_total) },
+          { label: "Próxima ação", value: <NextAction action={nextAction} /> },
+        ]}
+      />
+
+      {isDraft && (
+        <div className="mb-4">
+          <TaskChecklist items={checklistItems} />
+        </div>
+      )}
 
       <Card title="Dados da demanda" className="mb-4">
         <dl className="row mb-0">
@@ -261,7 +330,7 @@ export default function DemandaDetail() {
           </Link>
         ) : null}
         footer={isDraft && itens.length > 0 ? (
-          <div className="d-flex justify-content-end">
+          <ActionBar summary="Rascunho pronto para envio quando os itens estiverem revisados.">
             <Button
               variant="success"
               loading={enviando}
@@ -270,7 +339,7 @@ export default function DemandaDetail() {
               <i className="bi bi-send" aria-hidden="true" />
               {enviando ? "Enviando..." : "Enviar para validação"}
             </Button>
-          </div>
+          </ActionBar>
         ) : null}
       >
         {itens.length === 0 ? (
@@ -290,6 +359,7 @@ export default function DemandaDetail() {
                 <th scope="col">Valor unit.</th>
                 <th scope="col">Valor total</th>
                 <th scope="col">Status</th>
+                <th scope="col">Próxima ação</th>
                 <th scope="col">DFD</th>
                 <th scope="col" className="text-end">Ações</th>
               </tr>
@@ -301,6 +371,7 @@ export default function DemandaDetail() {
                 const dfdNumber = getDfdNumber(item);
                 const editable = canEditItem(demanda, item);
                 const resubmittable = canResubmitItem(demanda, item);
+                const itemNextAction = getItemNextAction(item, demanda);
 
                 return (
                   <tr key={item.id}>
@@ -334,6 +405,7 @@ export default function DemandaDetail() {
                     <td>{formatCurrency(item.valor_estimado)}</td>
                     <td>{formatCurrency(item.valor_total)}</td>
                     <td><StatusBadge status={item.status} /></td>
+                    <td><NextAction action={itemNextAction} compact /></td>
                     <td>
                       {dfdNumber ? (
                         <span className="fw-semibold" aria-label={`DFD ${dfdNumber}`}>
@@ -379,7 +451,7 @@ export default function DemandaDetail() {
               <tr>
                 <th colSpan={3} className="text-end">Total</th>
                 <th>{formatCurrency(demanda.valor_total)}</th>
-                <th colSpan={3} />
+                <th colSpan={4} />
               </tr>
             </tfoot>
           </Table>
@@ -411,19 +483,36 @@ export default function DemandaDetail() {
 
       <ConfirmDialog
         open={Boolean(confirmacao)}
-        title={confirmacao?.tipo === "enviar" ? "Enviar demanda" : "Reenviar item"}
-        confirmLabel={confirmacao?.tipo === "enviar" ? "Confirmar envio" : "Confirmar reenvio"}
-        confirmVariant="success"
-        loading={enviando || Boolean(reenviandoId)}
+        title={
+          confirmacao?.tipo === "enviar"
+            ? "Enviar demanda"
+            : confirmacao?.tipo === "excluir"
+              ? "Excluir rascunho"
+              : "Reenviar item"
+        }
+        confirmLabel={
+          confirmacao?.tipo === "enviar"
+            ? "Confirmar envio"
+            : confirmacao?.tipo === "excluir"
+              ? "Confirmar exclusão"
+              : "Confirmar reenvio"
+        }
+        confirmVariant={confirmacao?.tipo === "excluir" ? "danger" : "success"}
+        loading={enviando || Boolean(reenviandoId) || excluindo}
         onClose={() => setConfirmacao(null)}
         onConfirm={() => {
           if (confirmacao?.tipo === "enviar") handleEnviar();
           if (confirmacao?.tipo === "reenviar") handleReenviarItem(confirmacao.item.id);
+          if (confirmacao?.tipo === "excluir") handleExcluir();
         }}
       >
         {confirmacao?.tipo === "enviar" ? (
           <p className="mb-0">
             Confirma o envio desta demanda para validação? Depois do envio, o rascunho não poderá ser editado.
+          </p>
+        ) : confirmacao?.tipo === "excluir" ? (
+          <p className="mb-0">
+            Tem certeza que deseja excluir esta demanda em rascunho? Esta ação não pode ser desfeita.
           </p>
         ) : (
           <p className="mb-0">

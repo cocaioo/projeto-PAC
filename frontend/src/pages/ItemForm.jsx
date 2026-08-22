@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ApiErrorMessage, { InlineMessage } from "../components/ApiErrorMessage";
 import CatalogItemAutocomplete from "../components/CatalogItemAutocomplete";
@@ -267,11 +267,25 @@ export default function ItemForm() {
     itemAtual?.ultima_devolucao?.comentario || itemAtual?.justificativa_devolucao || "";
   const totalVisual = Number(form.quantidade || 0) * Number(form.valor_estimado || 0);
   const camposCatalogoBloqueados = origem === "catalogo" && Boolean(form.item_catalogo);
+  const targetDemandaId = id || itemAtual?.demanda;
+  const backUrl = targetDemandaId ? `/demandas/${targetDemandaId}` : "/demandas";
 
   return (
     <div className="row justify-content-center">
       <div className="col-md-8">
-        <PageHeader eyebrow="Minhas demandas" title={isEditing ? "Editar item" : "Adicionar item"} />
+        <PageHeader
+          eyebrow="Minhas demandas"
+          title={isEditing ? "Editar item" : "Adicionar item"}
+          description={isEditing
+            ? "Ajuste os dados do item e justifique as alterações para nova validação."
+            : "Preencha as informações do item que compõe o planejamento de compras da unidade."}
+          actions={(
+            <Link to={backUrl} className="pac-button pac-button--secondary">
+              <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+              Voltar para demanda
+            </Link>
+          )}
+        />
 
         <ApiErrorMessage error={erro} title="Não foi possível salvar o item" />
         {mensagem && (
@@ -373,6 +387,7 @@ export default function ItemForm() {
             <div className="col-md-4">
               <label htmlFor="data_prevista" className="form-label">Data prevista</label>
               <input id="data_prevista" type="date" className="form-control" value={form.data_prevista} onChange={(e) => atualizar("data_prevista", e.target.value)} required {...errorProps("data_prevista")} />
+              <div className="form-text">Data estimada para entrega do bem ou início do serviço.</div>
               {fieldError("data_prevista")}
             </div>
             <div className="col-md-4">
@@ -383,10 +398,12 @@ export default function ItemForm() {
                 <option value="alta">Alta</option>
                 <option value="critica">Crítica</option>
               </select>
+              <div className="form-text">Grau de urgência no planejamento anual.</div>
             </div>
             <div className="col-md-4">
               <label htmlFor="indicacao_orcamentaria" className="form-label">Indicação orçamentária</label>
-              <input id="indicacao_orcamentaria" className="form-control" value={form.indicacao_orcamentaria} onChange={(e) => atualizar("indicacao_orcamentaria", e.target.value)} required {...errorProps("indicacao_orcamentaria")} />
+              <input id="indicacao_orcamentaria" className="form-control" value={form.indicacao_orcamentaria} onChange={(e) => atualizar("indicacao_orcamentaria", e.target.value)} placeholder="Ex.: Recursos Próprios, Fonte 1000, Convênio" required {...errorProps("indicacao_orcamentaria")} />
+              <div className="form-text">Origem/fonte prevista dos recursos para pagamento deste item.</div>
               {fieldError("indicacao_orcamentaria")}
             </div>
             <div className="col-md-6">
@@ -398,6 +415,7 @@ export default function ItemForm() {
             <div className="col-md-6">
               <label htmlFor="justificativa_necessidade" className="form-label">Justificativa da necessidade</label>
               <textarea id="justificativa_necessidade" className="form-control" rows={2} value={form.justificativa_necessidade} onChange={(e) => atualizar("justificativa_necessidade", e.target.value)} required {...errorProps("justificativa_necessidade")} />
+              <div className="form-text">Explique a finalidade institucional e a relevância da contratação.</div>
               {fieldError("justificativa_necessidade")}
             </div>
             <div className="col-12">
@@ -416,16 +434,21 @@ export default function ItemForm() {
             </div>
           </div>
 
-          <Button type="submit" className="mt-3" loading={enviando} disabled={reenviando}>
-            {enviando ? "Salvando..." : isEditing ? "Salvar alterações" : "Adicionar item"}
-          </Button>
-          {isEditing && itemAtual?.status === "devolvida" && (
-            <>
-              <Button variant="success" className="mt-3 ms-2" loading={reenviando} disabled={enviando || isDirty} onClick={() => setConfirmarReenvio(true)}>
+          <div className="d-flex flex-wrap gap-2 align-items-center mt-3">
+            <Button type="submit" loading={enviando} disabled={reenviando}>
+              {enviando ? "Salvando..." : isEditing ? "Salvar alterações" : "Adicionar item"}
+            </Button>
+            {isEditing && itemAtual?.status === "devolvida" && (
+              <Button variant="success" loading={reenviando} disabled={enviando || isDirty} onClick={() => setConfirmarReenvio(true)}>
                 {reenviando ? "Reenviando..." : "Reenviar"}
               </Button>
-              {isDirty && <div className="form-text">Salve as alterações antes de reenviar.</div>}
-            </>
+            )}
+            <Link to={backUrl} className="pac-button pac-button--secondary">
+              Cancelar
+            </Link>
+          </div>
+          {isEditing && itemAtual?.status === "devolvida" && isDirty && (
+            <div className="form-text mt-1">Salve as alterações antes de reenviar.</div>
           )}
         </form>
       </div>

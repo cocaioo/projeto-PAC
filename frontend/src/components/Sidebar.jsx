@@ -4,12 +4,12 @@ const userLinks = [
   { to: "/", label: "Início", icon: "bi-house" },
   { to: "/demandas", label: "Demandas", icon: "bi-file-earmark-text" },
   { to: "/catalogo", label: "Catálogo", icon: "bi-box-seam" },
-  { to: "/dashboard", label: "Dashboard", icon: "bi-bar-chart" },
+  { to: "/dashboard", label: "Indicadores", icon: "bi-bar-chart" },
 ];
 
 const adminLinks = [
-  { to: "/validacoes", label: "Validações", icon: "bi-check2-square" },
-  { to: "/dfds", label: "DFDs", icon: "bi-collection" },
+  { to: "/validacoes", label: "Demandas para validar", icon: "bi-check2-square" },
+  { to: "/dfds", label: "Documentos DFD", icon: "bi-collection" },
 ];
 
 function MenuLink({ item }) {

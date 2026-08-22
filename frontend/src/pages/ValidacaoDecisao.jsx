@@ -175,8 +175,8 @@ export default function ValidacaoDecisao() {
         description="Analise cada item separadamente. Uma devolução não impede a decisão dos demais itens."
         actions={(
           <Link to="/validacoes" className="pac-button pac-button--secondary">
-            <i className="bi bi-arrow-left" aria-hidden="true" />
-            Voltar
+            <i className="bi bi-arrow-left me-1" aria-hidden="true" />
+            Voltar para validações
           </Link>
         )}
       />
@@ -321,6 +321,7 @@ export default function ValidacaoDecisao() {
               variant="danger"
               loading={decidindoId === itemParaDevolver?.id}
               onClick={confirmarDevolucao}
+              disabled={Boolean(decidindoId) || !comentario.trim()}
             >
               Confirmar devolução
             </Button>

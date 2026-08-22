@@ -27,7 +27,7 @@ describe("Layout", () => {
     const { container } = renderLayout();
     const shell = container.querySelector(".app-shell");
     const sidebar = within(shell).getByRole("complementary", {
-      name: /Navega..o principal/i,
+      name: /Navegação principal/i,
     });
     const appMain = shell.querySelector(":scope > .app-main");
     const header = within(appMain).getByRole("banner");
@@ -66,7 +66,7 @@ describe("Layout", () => {
     renderLayout();
     expect(screen.getByText("Demandas")).toBeInTheDocument();
     expect(screen.getByText("Ana Silva")).toBeInTheDocument();
-    expect(screen.queryByText("Validações")).not.toBeInTheDocument();
+    expect(screen.queryByText("Demandas para validar")).not.toBeInTheDocument();
   });
 
   it("não mostra menus administrativos apenas por is_staff", () => {
@@ -76,8 +76,8 @@ describe("Layout", () => {
       logout: vi.fn(),
     });
     renderLayout();
-    expect(screen.queryByText("Validações")).not.toBeInTheDocument();
-    expect(screen.queryByText("DFDs")).not.toBeInTheDocument();
+    expect(screen.queryByText("Demandas para validar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Documentos DFD")).not.toBeInTheDocument();
   });
 
   it("mostra menus administrativos conforme o perfil PAC mesmo sem is_staff", () => {
@@ -88,7 +88,7 @@ describe("Layout", () => {
       logout: vi.fn(),
     });
     renderLayout();
-    expect(screen.getByText("Validações")).toBeInTheDocument();
-    expect(screen.getByText("DFDs")).toBeInTheDocument();
+    expect(screen.getByText("Demandas para validar")).toBeInTheDocument();
+    expect(screen.getByText("Documentos DFD")).toBeInTheDocument();
   });
 });
