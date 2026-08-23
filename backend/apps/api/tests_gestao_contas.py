@@ -606,3 +606,90 @@ class GestaoContasTestCase(APITestCase):
         for s in res_p.data:
             self.assertEqual(s["status"], StatusSolicitacao.PENDENTE)
 
+    # =========================================================================
+    # 6. Exclusão de Contas de Usuário (Admin Master)
+    # =========================================================================
+
+    def test_excluir_usuario_comum_com_sucesso(self):
+        usuario_alvo = User.objects.create(
+            username="usuario.deletavel",
+            email="usuario.deletavel@ufpi.edu.br",
+            first_name="Usuario Deletavel",
+            unidade=self.unidade,
+            perfil=Perfil.USUARIO,
+            is_active=True
+        )
+        self.client.force_login(self.admin_master)
+        url = reverse("api:admin-usuario-detail", kwargs={"pk": usuario_alvo.id})
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["message"], "Usuário excluído com sucesso.")
+        self.assertFalse(User.objects.filter(id=usuario_alvo.id).exists())
+
+    def test_usuario_comum_nao_pode_excluir_usuario(self):
+        usuario_alvo = User.objects.create(
+            username="outro.usuario",
+            email="outro.usuario@ufpi.edu.br",
+            first_name="Outro Usuario",
+            unidade=self.unidade,
+            perfil=Perfil.USUARIO,
+        )
+        self.client.force_login(self.comum_user)
+        url = reverse("api:admin-usuario-detail", kwargs={"pk": usuario_alvo.id})
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 403)
+        self.assertTrue(User.objects.filter(id=usuario_alvo.id).exists())
+
+    def test_admin_master_nao_pode_excluir_a_si_mesmo(self):
+        self.client.force_login(self.admin_master)
+        url = reverse("api:admin-usuario-detail", kwargs={"pk": self.admin_master.id})
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("sua própria conta", res.data["error"])
+        self.assertTrue(User.objects.filter(id=self.admin_master.id).exists())
+
+    def test_nao_pode_excluir_unico_admin_master(self):
+        # Cria um segundo admin master para fazer a requisição
+        segundo_master = User.objects.create(
+            username="segundo_master",
+            email="master2@ufpi.edu.br",
+            first_name="Master 2",
+            unidade=self.unidade,
+            perfil=Perfil.ADMIN_MASTER,
+        )
+        # Apaga o self.admin_master para sobrar apenas segundo_master
+        # Quando só tiver 1 master e tentar apagar ele:
+        self.admin_master.perfil = Perfil.USUARIO
+        self.admin_master.save()
+
+        self.client.force_login(self.admin_master)
+        # Força status master no solicitante da request
+        self.admin_master.is_superuser = True
+        self.admin_master.save()
+
+        url = reverse("api:admin-usuario-detail", kwargs={"pk": segundo_master.id})
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("único Admin Master", res.data["error"])
+
+    def test_excluir_usuario_com_demandas_vinculadas_retorna_400_com_orientacao(self):
+        from apps.demandas.models import Demanda
+        demanda = Demanda.objects.create(
+            usuario=self.comum_user,
+            unidade=self.unidade,
+            ano_referencia=2026,
+        )
+        self.client.force_login(self.admin_master)
+        url = reverse("api:admin-usuario-detail", kwargs={"pk": self.comum_user.id})
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("registros vinculados", res.data["error"])
+        self.assertTrue(User.objects.filter(id=self.comum_user.id).exists())
+
+    def test_excluir_usuario_inexistente_retorna_404(self):
+        self.client.force_login(self.admin_master)
+        url = reverse("api:admin-usuario-detail", kwargs={"pk": 999999})
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, 404)
+
+

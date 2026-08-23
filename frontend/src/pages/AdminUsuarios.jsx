@@ -207,6 +207,16 @@ function TabUsuarios() {
     }
   };
 
+  const excluirConta = async (user) => {
+    if (!window.confirm(`Tem certeza que deseja excluir permanentemente o registro da conta de ${user.nome_completo || user.email}? Esta ação não pode ser desfeita.`)) return;
+    try {
+      await api.deleteUsuarioAdmin(user.id);
+      carregar();
+    } catch (err) {
+      alert("Erro ao excluir conta: " + err.message);
+    }
+  };
+
   if (loading && usuarios.length === 0) return <LoadingState />;
 
   return (
@@ -240,7 +250,7 @@ function TabUsuarios() {
               <th>Unidade</th>
               <th>Grupos da unidade</th>
               <th>Status</th>
-              <th>Ação</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -257,9 +267,21 @@ function TabUsuarios() {
                   </span>
                 </td>
                 <td>
-                  <button className={`btn btn-sm btn-${u.is_active ? 'danger' : 'success'}`} onClick={() => toggleStatus(u)}>
-                    {u.is_active ? 'Desativar' : 'Ativar'}
-                  </button>
+                  <div className="d-flex gap-2">
+                    <button 
+                      className={`btn btn-sm btn-${u.is_active ? 'danger' : 'success'}`} 
+                      onClick={() => toggleStatus(u)}
+                    >
+                      {u.is_active ? 'Desativar' : 'Ativar'}
+                    </button>
+                    <button
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => excluirConta(u)}
+                      title="Excluir permanentemente o registro da conta"
+                    >
+                      <i className="bi bi-trash me-1"></i>Excluir
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

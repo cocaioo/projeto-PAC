@@ -33,6 +33,7 @@ urlpatterns = [
     path("admin/solicitacoes/<int:pk>/aprovar/", views.AdminAprovarSolicitacaoView.as_view(), name="admin-aprovar"),
     path("admin/solicitacoes/<int:pk>/rejeitar/", views.AdminRejeitarSolicitacaoView.as_view(), name="admin-rejeitar"),
     path("admin/usuarios/", views.AdminUsuariosView.as_view(), name="admin-usuarios"),
+    path("admin/usuarios/<int:pk>/", views.AdminUsuarioDetailView.as_view(), name="admin-usuario-detail"),
     path("admin/usuarios/<int:pk>/status/", views.AdminUsuarioStatusView.as_view(), name="admin-usuario-status"),
 
     # Dashboard.

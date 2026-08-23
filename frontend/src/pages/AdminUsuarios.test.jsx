@@ -17,6 +17,7 @@ vi.mock("../api/client", async () => {
       listUsuariosAdmin: vi.fn(),
       createUsuarioAdmin: vi.fn(),
       updateUsuarioStatus: vi.fn(),
+      deleteUsuarioAdmin: vi.fn(),
       listUnidades: vi.fn(),
       listGrupos: vi.fn(),
     },
@@ -156,4 +157,25 @@ describe("AdminUsuarios", () => {
 
     expect(await screen.findByText(/e-mail inválido ou já existente/i)).toBeInTheDocument();
   });
+
+  it("permite excluir permanentemente a conta de um usuário", async () => {
+    api.listUsuariosAdmin.mockResolvedValue([
+      { id: 3, nome_completo: "Carlos", email: "carlos@ufpi.br", perfil: "usuario", unidade_nome: "CCAA", is_active: true }
+    ]);
+
+    renderWithRouter(<AdminUsuarios />);
+    
+    await userEvent.click(screen.getByText("Usuários Cadastrados", { selector: 'button' }));
+    
+    await waitFor(() => {
+      expect(screen.getByText("Carlos")).toBeInTheDocument();
+    });
+
+    api.deleteUsuarioAdmin.mockResolvedValue({ message: "Usuário excluído com sucesso." });
+    await userEvent.click(screen.getByRole("button", { name: /Excluir/i }));
+    
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("excluir permanentemente o registro da conta"));
+    expect(api.deleteUsuarioAdmin).toHaveBeenCalledWith(3);
+  });
 });
+

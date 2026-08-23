@@ -1,5 +1,5 @@
 import re
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -195,3 +195,35 @@ def alterar_status_usuario(admin_master_user, usuario_id, is_active):
     )
     
     return usuario
+
+
+@transaction.atomic
+def excluir_usuario(admin_master_user, usuario_id):
+    if not admin_master_user.is_admin_master_user:
+        raise ValidationError("Apenas o Admin Master pode excluir usuários.")
+
+    usuario = Usuario.objects.get(id=usuario_id)
+
+    if usuario.id == admin_master_user.id:
+        raise ValidationError("Não é possível excluir a sua própria conta de usuário.")
+
+    if usuario.perfil == Perfil.ADMIN_MASTER:
+        total_masters = Usuario.objects.filter(perfil=Perfil.ADMIN_MASTER).count()
+        if total_masters <= 1:
+            raise ValidationError("Não é possível excluir o único Admin Master do sistema.")
+
+    try:
+        registrar_log(
+            usuario=admin_master_user,
+            acao="EXCLUSAO_USUARIO",
+            modelo="Usuario",
+            objeto_id=usuario.id,
+            dados_novos={'email': usuario.email, 'username': usuario.username}
+        )
+        usuario.delete()
+    except models.ProtectedError:
+        raise ValidationError(
+            "Não é possível excluir este usuário permanentemente pois existem registros vinculados "
+            "(como demandas, DFDs ou validações). Para revogar o acesso, utilize a opção de desativar."
+        )
+

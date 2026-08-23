@@ -243,5 +243,13 @@ describe("api client", () => {
       expect.stringContaining("/admin/usuarios/12/status/"),
       expect.objectContaining({ method: "PATCH" })
     );
+
+    global.fetch = mockFetch(200, { message: "Usuário excluído com sucesso." });
+    await api.deleteUsuarioAdmin(12);
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/usuarios/12/"),
+      expect.objectContaining({ method: "DELETE" })
+    );
   });
 });
+

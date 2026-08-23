@@ -1220,7 +1220,7 @@ from apps.api.permissions import IsAdminMasterUserPermission
 from apps.unidades.models import Unidade
 from apps.usuarios.services import (
     solicitar_acesso, aprovar_solicitacao, rejeitar_solicitacao, 
-    criar_usuario_admin, alterar_status_usuario
+    criar_usuario_admin, alterar_status_usuario, excluir_usuario
 )
 from apps.usuarios.models import SolicitacaoAcesso, Usuario
 from apps.api.serializers import (
@@ -1332,3 +1332,23 @@ class AdminUsuarioStatusView(APIView):
             return Response({"message": "Status atualizado."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminUsuarioDetailView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def delete(self, request, pk):
+        try:
+            excluir_usuario(
+                admin_master_user=request.user,
+                usuario_id=pk
+            )
+            return Response({"message": "Usuário excluído com sucesso."}, status=status.HTTP_200_OK)
+        except Usuario.DoesNotExist:
+            return Response({"error": "Usuário não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            msg = e.message if hasattr(e, 'message') else str(e)
+            if msg.startswith("['") and msg.endswith("']"):
+                msg = msg[2:-2]
+            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+

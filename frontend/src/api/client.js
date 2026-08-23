@@ -201,6 +201,7 @@ export const api = {
   listUsuariosAdmin: (query) => request("/admin/usuarios/", { query }),
   createUsuarioAdmin: (body) => request("/admin/usuarios/", { method: "POST", body }),
   updateUsuarioStatus: (id, body) => request(`/admin/usuarios/${id}/status/`, { method: "PATCH", body }),
+  deleteUsuarioAdmin: (id) => request(`/admin/usuarios/${id}/`, { method: "DELETE" }),
 
   dashboardStats: () => request("/dashboard/stats/"),
 };
