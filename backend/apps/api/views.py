@@ -52,6 +52,7 @@ from .serializers import (
     ItemDemandaSerializer,
     ItensElegiveisQuerySerializer,
     UnidadeSerializer,
+    UsuarioMeSerializer,
     UsuarioSerializer,
     ValidacaoSerializer,
 )
@@ -134,7 +135,7 @@ def login_view(request):
         )
 
     login(request, user)
-    return Response(UsuarioSerializer(user).data)
+    return Response(UsuarioMeSerializer(user).data)
 
 
 @api_view(["POST"])
@@ -147,7 +148,7 @@ def logout_view(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me_view(request):
-    return Response(UsuarioSerializer(request.user).data)
+    return Response(UsuarioMeSerializer(request.user).data)
 
 
 # =============================================================================
@@ -161,7 +162,7 @@ class UnidadeViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in {"create", "update", "partial_update", "destroy"}:
             return [IsAuthenticated(), IsAdminMasterUserPermission()]
-        return [IsAuthenticated()]
+        return [AllowAny()]
 
 
 class GrupoContratacaoViewSet(viewsets.ModelViewSet):
@@ -723,6 +724,20 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ValidacaoSerializer
     permission_classes = [IsAuthenticated, IsAdminUserPermission]
 
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related(
+            "item_demanda__item_catalogo__grupo"
+        )
+        user = self.request.user
+        if user.is_admin_master_user:
+            return queryset
+        if not user.unidade_id:
+            return queryset.none()
+        return queryset.filter(
+            item_demanda__item_catalogo__isnull=False,
+            item_demanda__item_catalogo__grupo__unidade_admin_id=user.unidade_id,
+        )
+
     @staticmethod
     def _itens_no_escopo_do_usuario(queryset, user):
         """Restringe ADMIN ao grupo administrado pela sua unidade.
@@ -1186,3 +1201,130 @@ class DashboardStatsView(APIView):
                 "total_dfds": dfds.count(),
             }
         )
+
+
+# =============================================================================
+# GESTÃO DE ACESSOS E USUÁRIOS
+# =============================================================================
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+
+from apps.api.permissions import IsAdminMasterUserPermission
+from apps.unidades.models import Unidade
+from apps.usuarios.services import (
+    solicitar_acesso, aprovar_solicitacao, rejeitar_solicitacao, 
+    criar_usuario_admin, alterar_status_usuario
+)
+from apps.usuarios.models import SolicitacaoAcesso, Usuario
+from apps.api.serializers import (
+    SolicitarAcessoSerializer, SolicitacaoAcessoListSerializer,
+    DecisaoSolicitacaoSerializer, CriarUsuarioAdminSerializer,
+    UsuarioAdminListSerializer, UsuarioStatusUpdateSerializer
+)
+
+class SolicitarAcessoView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = SolicitarAcessoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            unidade = Unidade.objects.get(id=serializer.validated_data['unidade_id'])
+            solicitar_acesso(
+                nome_completo=serializer.validated_data['nome_completo'],
+                email=serializer.validated_data['email'],
+                unidade=unidade,
+                senha=serializer.validated_data['senha']
+            )
+            return Response({"message": "Solicitação enviada com sucesso."}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminSolicitacoesListView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def get(self, request):
+        status_filter = request.query_params.get('status', None)
+        queryset = SolicitacaoAcesso.objects.all().order_by('-criado_em')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+            
+        serializer = SolicitacaoAcessoListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+class AdminAprovarSolicitacaoView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def post(self, request, pk):
+        try:
+            aprovar_solicitacao(pk, request.user)
+            return Response({"message": "Solicitação aprovada."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminRejeitarSolicitacaoView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def post(self, request, pk):
+        serializer = DecisaoSolicitacaoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            rejeitar_solicitacao(
+                solicitacao_id=pk, 
+                admin_master_user=request.user, 
+                justificativa=serializer.validated_data.get('justificativa', '')
+            )
+            return Response({"message": "Solicitação rejeitada."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminUsuariosView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def get(self, request):
+        users = Usuario.objects.all().select_related('unidade').prefetch_related('unidade__grupos_administrados').order_by('first_name')
+        perfil = request.query_params.get('perfil')
+        unidade = request.query_params.get('unidade')
+        if perfil:
+            users = users.filter(perfil=perfil)
+        if unidade:
+            users = users.filter(unidade_id=unidade)
+        serializer = UsuarioAdminListSerializer(users, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = CriarUsuarioAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            unidade = Unidade.objects.get(id=serializer.validated_data['unidade_id'])
+            criar_usuario_admin(
+                admin_master_user=request.user,
+                nome_completo=serializer.validated_data['nome_completo'],
+                email=serializer.validated_data['email'],
+                unidade=unidade,
+                perfil=serializer.validated_data['perfil'],
+                senha_temporaria=serializer.validated_data['senha_temporaria']
+            )
+            return Response({"message": "Usuário criado com sucesso."}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminUsuarioStatusView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def patch(self, request, pk):
+        serializer = UsuarioStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            alterar_status_usuario(
+                admin_master_user=request.user,
+                usuario_id=pk,
+                is_active=serializer.validated_data['is_active']
+            )
+            return Response({"message": "Status atualizado."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -259,3 +259,38 @@ class ValidacaoEscopoTests(APITestCase):
 
         self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("grupo", resposta.data)
+
+    def test_admin_lista_historico_de_validacoes_apenas_do_proprio_grupo(self):
+        validacao_grupo_a = Validacao.objects.create(
+            item_demanda=self.item_grupo_a,
+            usuario=self.admin_a,
+            acao="validado",
+            comentario="Grupo A",
+        )
+        Validacao.objects.create(
+            item_demanda=self.item_grupo_b,
+            usuario=self.admin_b,
+            acao="devolvido",
+            comentario="Grupo B",
+        )
+
+        self.client.force_login(self.admin_a)
+        resposta = self.client.get(reverse("api:validacao-list"))
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in resposta.data["results"]], [validacao_grupo_a.id])
+
+    def test_admin_de_outro_grupo_recebe_404_ao_consultar_validacao_por_id(self):
+        validacao_grupo_a = Validacao.objects.create(
+            item_demanda=self.item_grupo_a,
+            usuario=self.admin_a,
+            acao="validado",
+            comentario="Grupo A",
+        )
+
+        self.client.force_login(self.admin_b)
+        resposta = self.client.get(
+            reverse("api:validacao-detail", kwargs={"pk": validacao_grupo_a.id})
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_404_NOT_FOUND)

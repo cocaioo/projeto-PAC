@@ -41,6 +41,82 @@ class UsuarioSerializer(serializers.ModelSerializer):
         return obj.get_full_name() or obj.username
 
 
+class GrupoContratacaoResumoSerializer(serializers.ModelSerializer):
+    unidade_admin_sigla = serializers.CharField(
+        source="unidade_admin.sigla", read_only=True
+    )
+
+    class Meta:
+        model = GrupoContratacao
+        fields = ["id", "nome", "unidade_admin", "unidade_admin_sigla", "ativo"]
+
+
+class UsuarioMeSerializer(serializers.ModelSerializer):
+    nome_completo = serializers.SerializerMethodField()
+    perfil_display = serializers.CharField(source="get_perfil_display", read_only=True)
+    unidade_detalhe = serializers.SerializerMethodField()
+    grupos_associados = serializers.SerializerMethodField()
+    grupos_administrados = serializers.SerializerMethodField()
+    status_conta = serializers.SerializerMethodField()
+    escopo_administrativo_global = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Usuario
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "nome_completo",
+            "email",
+            "siape",
+            "perfil",
+            "perfil_display",
+            "unidade",
+            "unidade_detalhe",
+            "is_active",
+            "status_conta",
+            "date_joined",
+            "last_login",
+            "is_staff",
+            "is_admin_user",
+            "is_admin_master_user",
+            "escopo_administrativo_global",
+            "grupos_associados",
+            "grupos_administrados",
+        ]
+
+    def get_nome_completo(self, obj):
+        return obj.get_full_name() or obj.username
+
+    def get_unidade_detalhe(self, obj):
+        if obj.unidade is None:
+            return None
+        return UnidadeSerializer(obj.unidade).data
+
+    def get_status_conta(self, obj):
+        return "ativa" if obj.is_active else "inativa"
+
+    def get_escopo_administrativo_global(self, obj):
+        return bool(obj.is_admin_master_user)
+
+    def _serializar_grupos_administrados(self, obj):
+        if obj.is_admin_master_user or not obj.is_admin_user or not obj.unidade_id:
+            return []
+        grupos = (
+            GrupoContratacao.objects.select_related("unidade_admin")
+            .filter(unidade_admin_id=obj.unidade_id)
+            .order_by("nome")
+        )
+        return GrupoContratacaoResumoSerializer(grupos, many=True).data
+
+    def get_grupos_associados(self, obj):
+        return self._serializar_grupos_administrados(obj)
+
+    def get_grupos_administrados(self, obj):
+        return self._serializar_grupos_administrados(obj)
+
+
 # =============================================================================
 # Unidades / Grupos / Catálogo
 # =============================================================================
@@ -437,3 +513,94 @@ class ItensElegiveisQuerySerializer(serializers.Serializer):
     ciclo_pac_id = serializers.IntegerField(min_value=1, required=False)
     item_catalogo_id = serializers.IntegerField(min_value=1, required=False)
     grupo_contratacao_id = serializers.IntegerField(min_value=1, required=False)
+
+
+# =============================================================================
+# GESTÃO DE ACESSOS E USUÁRIOS
+# =============================================================================
+
+from apps.usuarios.models import SolicitacaoAcesso, Usuario, Perfil
+
+class SolicitarAcessoSerializer(serializers.Serializer):
+    nome_completo = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    unidade_id = serializers.IntegerField(required=False)
+    unidade = serializers.IntegerField(required=False)
+    senha = serializers.CharField(write_only=True, min_length=6)
+
+    def validate(self, attrs):
+        unidade_val = attrs.get('unidade_id') or attrs.get('unidade')
+        if not unidade_val:
+            raise serializers.ValidationError({"unidade": "Unidade é obrigatória."})
+        attrs['unidade_id'] = int(unidade_val)
+        return attrs
+
+class SolicitacaoAcessoListSerializer(serializers.ModelSerializer):
+    unidade_sigla = serializers.CharField(source='unidade.sigla', read_only=True)
+    unidade_nome = serializers.CharField(source='unidade.nome', read_only=True)
+    analisado_por_nome = serializers.CharField(source='analisado_por.get_full_name', read_only=True)
+    data_solicitacao = serializers.DateTimeField(source='criado_em', read_only=True)
+
+    class Meta:
+        model = SolicitacaoAcesso
+        fields = '__all__'
+
+class DecisaoSolicitacaoSerializer(serializers.Serializer):
+    justificativa = serializers.CharField(required=False, allow_blank=True)
+    motivo_rejeicao = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        just = attrs.get('justificativa') or attrs.get('motivo_rejeicao') or ''
+        attrs['justificativa'] = just
+        return attrs
+
+class CriarUsuarioAdminSerializer(serializers.Serializer):
+    nome_completo = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    unidade_id = serializers.IntegerField(required=False)
+    unidade = serializers.IntegerField(required=False, allow_null=True)
+    perfil = serializers.ChoiceField(choices=Perfil.choices)
+    senha_temporaria = serializers.CharField(write_only=True, min_length=6, required=False)
+    senha = serializers.CharField(write_only=True, min_length=6, required=False)
+    grupos_administrados = serializers.ListField(child=serializers.IntegerField(), required=False)
+
+    def validate(self, attrs):
+        unidade_val = attrs.get('unidade_id') or attrs.get('unidade')
+        if not unidade_val:
+            raise serializers.ValidationError({"unidade": "Unidade é obrigatória."})
+        attrs['unidade_id'] = int(unidade_val)
+        senha_val = attrs.get('senha_temporaria') or attrs.get('senha')
+        if not senha_val:
+            raise serializers.ValidationError({"senha_temporaria": "Senha temporária é obrigatória."})
+        attrs['senha_temporaria'] = senha_val
+        return attrs
+
+class UsuarioAdminListSerializer(serializers.ModelSerializer):
+    unidade_sigla = serializers.CharField(source='unidade.sigla', read_only=True)
+    unidade_nome = serializers.CharField(source='unidade.nome', read_only=True)
+    nome_completo = serializers.CharField(source='first_name', read_only=True)
+    grupos_nomes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Usuario
+        fields = [
+            'id', 'username', 'first_name', 'nome_completo', 'email', 'perfil',
+            'unidade', 'unidade_sigla', 'unidade_nome', 'grupos_nomes',
+            'is_active', 'precisa_trocar_senha'
+        ]
+
+    def get_grupos_nomes(self, obj):
+        if obj.unidade:
+            return list(obj.unidade.grupos_administrados.values_list('nome', flat=True))
+        return []
+
+class UsuarioStatusUpdateSerializer(serializers.Serializer):
+    is_active = serializers.BooleanField(required=False)
+    ativo = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        if 'is_active' not in attrs and 'ativo' not in attrs:
+            raise serializers.ValidationError("Informe o status is_active.")
+        if 'is_active' not in attrs:
+            attrs['is_active'] = attrs['ativo']
+        return attrs

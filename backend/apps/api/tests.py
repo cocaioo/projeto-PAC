@@ -718,15 +718,34 @@ class SincronizacaoMacroTests(APITestCase):
 class ServerSideIntegrationTests(APITestCase):
     def setUp(self):
         self.unidade = criar_unidade()
+        self.unidade_admin = criar_unidade("ADM")
         self.user = criar_usuario(unidade=self.unidade)
-        self.admin = criar_usuario(username="admin", is_staff=True, perfil="admin")
+        self.admin = criar_usuario(
+            username="admin",
+            unidade=self.unidade_admin,
+            is_staff=True,
+            perfil="admin",
+        )
+        self.grupo = GrupoContratacao.objects.create(
+            nome="Grupo administrativo",
+            unidade_admin=self.unidade_admin,
+        )
+        self.catalogo = ItemCatalogo.objects.create(
+            tipo="material",
+            nome="Monitor catalogado",
+            descricao="Monitor institucional",
+            codigo_catmat_catser="CAT-SERVER-SIDE",
+            grupo=self.grupo,
+            unidade_medida="unidade",
+            valor_estimado=Decimal("500"),
+        )
         self.demanda = Demanda.objects.create(
             unidade=self.unidade, usuario=self.user, ano_referencia=2027
         )
 
     def test_server_side_envio_e_validacao(self):
         item = ItemDemanda.objects.create(
-            demanda=self.demanda, tipo="material", nome="Monitor", quantidade=1,
+            demanda=self.demanda, item_catalogo=self.catalogo, tipo="material", nome="Monitor", quantidade=1,
             valor_estimado=Decimal("500"), valor_total=Decimal("500"),
             data_prevista=date(2027, 1, 1), status=StatusItemDemanda.RASCUNHO,
             justificativa_necessidade="Uso necessário",

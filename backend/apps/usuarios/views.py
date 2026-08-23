@@ -1,10 +1,29 @@
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_POST
 
 from .models import Usuario
 
 
+def _forbidden():
+    return JsonResponse({"detail": "Acesso restrito ao ADMIN MASTER."}, status=403)
+
+
+def _garantir_admin_master(request):
+    if not request.user.is_authenticated:
+        return _forbidden()
+    if not request.user.is_admin_master_user:
+        return _forbidden()
+    return None
+
+
+@login_required
 def listar_usuarios(request):
+    forbidden = _garantir_admin_master(request)
+    if forbidden:
+        return forbidden
+
     usuarios = list(
         Usuario.objects.values(
             "id",
@@ -24,7 +43,12 @@ def listar_usuarios(request):
     })
 
 
+@login_required
 def detalhe_usuario(request, pk):
+    forbidden = _garantir_admin_master(request)
+    if forbidden:
+        return forbidden
+
     usuario = get_object_or_404(
         Usuario,
         pk=pk,
@@ -47,7 +71,13 @@ def detalhe_usuario(request, pk):
     })
 
 
+@login_required
+@require_POST
 def ativar_usuario(request, pk):
+    forbidden = _garantir_admin_master(request)
+    if forbidden:
+        return forbidden
+
     usuario = get_object_or_404(
         Usuario,
         pk=pk,
@@ -58,11 +88,17 @@ def ativar_usuario(request, pk):
 
     return JsonResponse({
         "sucesso": True,
-        "mensagem": "Usuário ativado com sucesso.",
+        "mensagem": "Usuario ativado com sucesso.",
     })
 
 
+@login_required
+@require_POST
 def desativar_usuario(request, pk):
+    forbidden = _garantir_admin_master(request)
+    if forbidden:
+        return forbidden
+
     usuario = get_object_or_404(
         Usuario,
         pk=pk,
@@ -73,5 +109,5 @@ def desativar_usuario(request, pk):
 
     return JsonResponse({
         "sucesso": True,
-        "mensagem": "Usuário desativado com sucesso.",
+        "mensagem": "Usuario desativado com sucesso.",
     })

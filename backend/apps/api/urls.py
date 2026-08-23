@@ -25,6 +25,16 @@ urlpatterns = [
     path("auth/logout/", views.logout_view, name="logout"),
     path("auth/me/", views.me_view, name="me"),
 
+    # Solicitação de Acesso
+    path("auth/solicitar-acesso/", views.SolicitarAcessoView.as_view(), name="solicitar-acesso"),
+
+    # Admin Master endpoints
+    path("admin/solicitacoes/", views.AdminSolicitacoesListView.as_view(), name="admin-solicitacoes"),
+    path("admin/solicitacoes/<int:pk>/aprovar/", views.AdminAprovarSolicitacaoView.as_view(), name="admin-aprovar"),
+    path("admin/solicitacoes/<int:pk>/rejeitar/", views.AdminRejeitarSolicitacaoView.as_view(), name="admin-rejeitar"),
+    path("admin/usuarios/", views.AdminUsuariosView.as_view(), name="admin-usuarios"),
+    path("admin/usuarios/<int:pk>/status/", views.AdminUsuarioStatusView.as_view(), name="admin-usuario-status"),
+
     # Dashboard.
     path("dashboard/stats/", views.DashboardStatsView.as_view(), name="dashboard-stats"),
     path("consolidacoes/ciclos/", views.CiclosElegiveisConsolidacaoView.as_view(), name="ciclos-elegiveis"),
