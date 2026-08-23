@@ -90,9 +90,14 @@ function TabSolicitacoes() {
 
   return (
     <div>
+      <div className="alert alert-info py-2 mb-3">
+        <i className="bi bi-info-circle me-2"></i>
+        Ao aprovar uma solicitação, a conta é ativada imediatamente e o usuário poderá fazer login utilizando seu <strong>e-mail institucional</strong> e a senha cadastrada.
+      </div>
+
       <div className="mb-3">
-        <label className="me-2">Filtrar por Status:</label>
-        <select value={statusFiltro} onChange={e => setStatusFiltro(e.target.value)} className="form-select d-inline-block w-auto">
+        <label className="me-2" htmlFor="status-filtro">Filtrar por Status:</label>
+        <select id="status-filtro" value={statusFiltro} onChange={e => setStatusFiltro(e.target.value)} className="form-select d-inline-block w-auto">
           <option value="pendente">Pendente</option>
           <option value="aprovado">Aprovado</option>
           <option value="rejeitado">Rejeitado</option>
@@ -308,10 +313,14 @@ function TabCriarUsuario({ onCreated }) {
 
   return (
     <Card className="p-4" style={{ maxWidth: '600px' }}>
+      <div className="alert alert-info py-2 mb-3">
+        <i className="bi bi-info-circle me-2"></i>
+        O novo usuário poderá acessar a plataforma informando seu <strong>e-mail institucional</strong> (ou nome de usuário) e a senha temporária definida abaixo.
+      </div>
       <ApiErrorMessage error={erro} fieldErrors={fieldErrors} />
       <form onSubmit={handleSubmit}>
-        <Input label="Nome Completo" value={nome} onChange={e => setNome(e.target.value)} required error={fieldErrors.nome_completo} />
-        <Input label="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} required error={fieldErrors.email} />
+        <Input label="Nome Completo" placeholder="ex: Maria de Lourdes" value={nome} onChange={e => setNome(e.target.value)} required error={fieldErrors.nome_completo} />
+        <Input label="E-mail" type="email" placeholder="ex: maria.lourdes@ufpi.edu.br" hint="O e-mail será o identificador principal de login do usuário." value={email} onChange={e => setEmail(e.target.value)} required error={fieldErrors.email} />
         
         <div className="mb-3">
           <label className="form-label" htmlFor="perfil">Perfil</label>
@@ -332,7 +341,7 @@ function TabCriarUsuario({ onCreated }) {
 
         {perfil === 'admin' && (
           <p className="text-muted small">
-            O escopo administrativo sera herdado dos grupos de contratacao administrados pela unidade selecionada.
+            O escopo administrativo será herdado dos grupos de contratação administrados pela unidade selecionada.
           </p>
         )}
 
@@ -342,7 +351,7 @@ function TabCriarUsuario({ onCreated }) {
           </p>
         )}
 
-        <Input label="Senha Temporária" type="password" value={senha} onChange={e => setSenha(e.target.value)} required error={fieldErrors.senha} />
+        <Input label="Senha Temporária" type="password" placeholder="Senha inicial de acesso" hint="O usuário utilizará esta senha junto com o e-mail no primeiro login." value={senha} onChange={e => setSenha(e.target.value)} required error={fieldErrors.senha} />
 
         <Button type="submit" loading={loading}>Salvar Usuário</Button>
       </form>

@@ -84,6 +84,7 @@ class UsuarioMeSerializer(serializers.ModelSerializer):
             "escopo_administrativo_global",
             "grupos_associados",
             "grupos_administrados",
+            "precisa_trocar_senha",
         ]
 
     def get_nome_completo(self, obj):

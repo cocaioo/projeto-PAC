@@ -234,3 +234,38 @@ class UsuariosLegacyAccessControlTests(TestCase):
             reverse("usuarios:desativar", kwargs={"pk": self.admin_master.pk})
         )
         self.assertEqual(post_resposta.status_code, 403)
+
+
+class AutenticacaoEmailOuUsernameTests(TestCase):
+    def setUp(self):
+        self.unidade = Unidade.objects.create(
+            codigo="DA01",
+            nome="Diretoria de Administracao",
+            sigla="DA",
+        )
+        self.usuario = Usuario.objects.create_user(
+            username="joao.silva",
+            email="joao.silva@ufpi.edu.br",
+            password="SenhaForte123!",
+            first_name="Joao Silva",
+            unidade=self.unidade,
+        )
+
+    def test_autentica_com_sucesso_usando_email(self):
+        user = authenticate(username="joao.silva@ufpi.edu.br", password="SenhaForte123!")
+        self.assertIsNotNone(user)
+        self.assertEqual(user.pk, self.usuario.pk)
+
+    def test_autentica_com_sucesso_usando_username(self):
+        user = authenticate(username="joao.silva", password="SenhaForte123!")
+        self.assertIsNotNone(user)
+        self.assertEqual(user.pk, self.usuario.pk)
+
+    def test_autentica_com_email_case_insensitive(self):
+        user = authenticate(username="JOAO.SILVA@UFPI.EDU.BR", password="SenhaForte123!")
+        self.assertIsNotNone(user)
+        self.assertEqual(user.pk, self.usuario.pk)
+
+    def test_rejeita_senha_incorreta(self):
+        user = authenticate(username="joao.silva@ufpi.edu.br", password="SenhaErrada!")
+        self.assertIsNone(user)

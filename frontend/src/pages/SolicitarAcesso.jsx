@@ -73,7 +73,12 @@ export default function SolicitarAcesso() {
           <div className="col-md-6">
             <div className="alert alert-success text-center mt-4 shadow-sm" role="alert">
               <h4 className="alert-heading mb-3"><i className="bi bi-check-circle me-2"></i>Sucesso!</h4>
-              <p>Sua solicitação de acesso foi enviada e aguarda aprovação pelo Administrador Master.</p>
+              <p>
+                Sua solicitação de acesso foi enviada com sucesso e aguarda aprovação pelo Administrador Master.
+              </p>
+              <p className="mb-0 text-muted">
+                Assim que for aprovada, você poderá entrar no sistema utilizando seu <strong>e-mail institucional</strong> e a senha cadastrada.
+              </p>
               <hr />
               <button className="btn btn-success mt-2" onClick={() => navigate("/login")}>
                 Voltar para o Login
@@ -93,7 +98,9 @@ export default function SolicitarAcesso() {
             <h1 className="h4 mb-3 text-center">
               <i className="bi bi-person-plus me-2"></i>Solicitar Acesso
             </h1>
-            <p className="text-muted text-center mb-4">Preencha os dados para criar sua conta</p>
+            <p className="text-muted text-center mb-4">
+              Preencha os dados institucionais para solicitar acesso. Após aprovação, seu login será realizado com seu e-mail institucional e senha cadastrada.
+            </p>
 
             <ApiErrorMessage error={erro} fieldErrors={fieldErrors} title="Erro na solicitação" />
 
@@ -101,6 +108,7 @@ export default function SolicitarAcesso() {
               <Input
                 id="nome"
                 label="Nome completo"
+                placeholder="ex: João da Silva"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 required
@@ -110,6 +118,8 @@ export default function SolicitarAcesso() {
                 id="email"
                 type="email"
                 label="E-mail institucional"
+                placeholder="ex: joao.silva@ufpi.edu.br"
+                hint="Este e-mail será o seu login principal de acesso à plataforma."
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -144,6 +154,8 @@ export default function SolicitarAcesso() {
                 id="senha"
                 type="password"
                 label="Senha"
+                placeholder="Defina sua senha de acesso"
+                hint="Senha que você utilizará para entrar no sistema junto com seu e-mail."
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 required
@@ -153,6 +165,7 @@ export default function SolicitarAcesso() {
                 id="confirmacao"
                 type="password"
                 label="Confirmação de senha"
+                placeholder="Repita a senha informada"
                 value={confirmacao}
                 onChange={(e) => setConfirmacao(e.target.value)}
                 required

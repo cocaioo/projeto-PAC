@@ -80,5 +80,53 @@ describe("SolicitarAcesso", () => {
     });
 
     expect(screen.getByText(/sua solicitação de acesso foi enviada/i)).toBeInTheDocument();
+    
+    // Testa botão voltar para login
+    const voltarBtn = screen.getByRole("button", { name: /voltar para o login/i });
+    expect(voltarBtn).toBeInTheDocument();
+    await userEvent.click(voltarBtn);
+  });
+
+  it("exibe mensagem de erro geral retornada pela API", async () => {
+    const error = new Error("Já existe um usuário com este e-mail.");
+    error.fieldErrors = {};
+    api.solicitarAcesso.mockRejectedValue(error);
+
+    renderWithRouter(<SolicitarAcesso />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /unidade/i })).not.toBeDisabled());
+
+    await userEvent.type(screen.getByLabelText(/nome completo/i), "João");
+    await userEvent.type(screen.getByLabelText(/e-mail/i), "joao@ufpi.edu.br");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
+    await userEvent.type(screen.getByLabelText(/^senha/i), "senha123");
+    await userEvent.type(screen.getByLabelText(/confirmação/i), "senha123");
+    await userEvent.click(screen.getByRole("button", { name: /solicitar/i }));
+
+    expect(await screen.findByText(/já existe um usuário com este e-mail/i)).toBeInTheDocument();
+  });
+
+  it("exibe erro específico de campo quando backend retorna fieldErrors", async () => {
+    const error = new Error("Revise os dados informados.");
+    error.fieldErrors = { email: ["O e-mail deve pertencer ao domínio @ufpi.edu.br"] };
+    api.solicitarAcesso.mockRejectedValue(error);
+
+    renderWithRouter(<SolicitarAcesso />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /unidade/i })).not.toBeDisabled());
+
+    await userEvent.type(screen.getByLabelText(/nome completo/i), "João");
+    await userEvent.type(screen.getByLabelText(/e-mail/i), "joao@gmail.com");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
+    await userEvent.type(screen.getByLabelText(/^senha/i), "senha123");
+    await userEvent.type(screen.getByLabelText(/confirmação/i), "senha123");
+    await userEvent.click(screen.getByRole("button", { name: /solicitar/i }));
+
+    expect(await screen.findByText(/o e-mail deve pertencer ao domínio @ufpi\.edu\.br/i)).toBeInTheDocument();
+  });
+
+  it("exibe aviso quando falha ao carregar unidades", async () => {
+    api.listUnidades.mockRejectedValue(new Error("Falha na rede"));
+    renderWithRouter(<SolicitarAcesso />);
+
+    expect(await screen.findByText(/não foi possível carregar as unidades/i)).toBeInTheDocument();
   });
 });

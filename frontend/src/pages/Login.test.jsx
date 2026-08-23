@@ -52,4 +52,35 @@ describe("Login", () => {
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/solicitar-acesso");
   });
+
+  it("aceita e-mail institucional e remove espaços em branco", async () => {
+    login.mockResolvedValue({ username: "ana.maria" });
+    renderWithRouter(<Login />, {
+      route: "/login",
+      path: "/login",
+      extraRoutes: [{ path: "/", element: <p>inicio</p> }],
+    });
+    await userEvent.type(screen.getByLabelText(/usuário/i), "  ana.maria@ufpi.edu.br  ");
+    await userEvent.type(screen.getByLabelText(/senha/i), "senha123");
+    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(login).toHaveBeenCalledWith("ana.maria@ufpi.edu.br", "senha123");
+    await waitFor(() => expect(screen.getByText("inicio")).toBeInTheDocument());
+  });
+
+  it("trata erro 401 sem detalhe com mensagem clara sem exibir sessão expirada", async () => {
+    const error401 = new Error("Sua sessão expirou. Entre novamente.");
+    error401.status = 401;
+    login.mockRejectedValue(error401);
+
+    renderWithRouter(<Login />, { route: "/login", path: "/login" });
+    await userEvent.type(screen.getByLabelText(/usuário/i), "usuario@ufpi.edu.br");
+    await userEvent.type(screen.getByLabelText(/senha/i), "senha");
+    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+
+    expect(
+      await screen.findByText(/credenciais inválidas/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/sua sessão expirou/i)).not.toBeInTheDocument();
+  });
 });

@@ -118,7 +118,11 @@ def csrf(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
-    username = request.data.get("username")
+    username = (
+        request.data.get("username")
+        or request.data.get("email")
+        or request.data.get("login")
+    )
     password = request.data.get("password")
 
     if not username or not password:

@@ -63,6 +63,9 @@ def aprovar_solicitacao(solicitacao_id, admin_master_user):
     if solicitacao.status != StatusSolicitacao.PENDENTE:
         raise ValidationError("Apenas solicitações pendentes podem ser aprovadas.")
         
+    if Usuario.objects.filter(email=solicitacao.email).exists():
+        raise ValidationError("Já existe um usuário com este e-mail.")
+
     username = solicitacao.email.split('@')[0]
     base_username = slugify(username)
     username = base_username
@@ -137,6 +140,9 @@ def criar_usuario_admin(admin_master_user, nome_completo, email, unidade, perfil
     if perfil not in [Perfil.USUARIO, Perfil.ADMIN, Perfil.ADMIN_MASTER]:
         raise ValidationError("Perfil inválido.")
         
+    if Usuario.objects.filter(email=email).exists():
+        raise ValidationError("Já existe um usuário com este e-mail.")
+
     username = email.split('@')[0]
     base_username = slugify(username)
     username = base_username

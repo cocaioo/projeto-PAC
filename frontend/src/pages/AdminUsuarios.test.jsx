@@ -130,4 +130,30 @@ describe("AdminUsuarios", () => {
     expect(window.confirm).toHaveBeenCalled();
     expect(api.updateUsuarioStatus).toHaveBeenCalledWith(2, { is_active: false });
   });
+
+  it("filtra solicitações de acesso por status", async () => {
+    renderWithRouter(<AdminUsuarios />);
+    const selectFiltro = await screen.findByLabelText(/Filtrar por Status:/i);
+    await userEvent.selectOptions(selectFiltro, "aprovado");
+
+    expect(api.listSolicitacoes).toHaveBeenCalledWith({ status: "aprovado" });
+  });
+
+  it("exibe erros de validação ao falhar na criação de usuário", async () => {
+    const error = new Error("Revise os dados informados.");
+    error.fieldErrors = { email: ["E-mail inválido ou já existente."] };
+    api.createUsuarioAdmin.mockRejectedValue(error);
+
+    renderWithRouter(<AdminUsuarios />);
+    await userEvent.click(screen.getByText("Criar Usuário", { selector: 'button' }));
+
+    await userEvent.type(screen.getByLabelText(/Nome Completo/i), "Teste");
+    await userEvent.type(screen.getByLabelText(/E-mail/i), "invalido@teste.com");
+    await userEvent.selectOptions(screen.getByLabelText(/Unidade/i), "1");
+    await userEvent.type(screen.getByLabelText(/Senha/i), "123456");
+
+    await userEvent.click(screen.getByRole("button", { name: "Salvar Usuário" }));
+
+    expect(await screen.findByText(/e-mail inválido ou já existente/i)).toBeInTheDocument();
+  });
 });
