@@ -63,7 +63,7 @@ function nomesDosGrupos(itens) {
 }
 
 export default function ValidacoesList() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const [itens, setItens] = useState([]);
   const [unidades, setUnidades] = useState([]);
   const [grupos, setGrupos] = useState([]);
@@ -74,7 +74,8 @@ export default function ValidacoesList() {
   const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
-    if (!isAdmin) return undefined;
+    // Bug #4: aguardar o AuthContext terminar antes de verificar isAdmin.
+    if (authLoading || !isAdmin) return undefined;
 
     let ativo = true;
     Promise.allSettled([
@@ -93,9 +94,12 @@ export default function ValidacoesList() {
     return () => {
       ativo = false;
     };
-  }, [isAdmin]);
+  }, [authLoading, isAdmin]);
 
   useEffect(() => {
+    // Bug #4: aguardar o AuthContext terminar antes de verificar isAdmin.
+    if (authLoading) return undefined;
+
     if (!isAdmin) {
       setCarregando(false);
       return undefined;
@@ -122,7 +126,7 @@ export default function ValidacoesList() {
     return () => {
       ativo = false;
     };
-  }, [grupo, isAdmin, tentativa, unidade]);
+  }, [authLoading, grupo, isAdmin, tentativa, unidade]);
 
   const demandas = useMemo(() => agruparItensPorDemanda(itens), [itens]);
   const gruposEnvolvidos = useMemo(() => new Set(itens.map((item) => item.grupo_nome).filter(Boolean)).size, [itens]);

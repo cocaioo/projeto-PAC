@@ -5,7 +5,8 @@ import { renderWithRouter } from "../test-utils";
 import ValidacoesList, { agruparItensPorDemanda } from "./ValidacoesList";
 import { api, ApiError } from "../api/client";
 
-const authState = vi.hoisted(() => ({ isAdmin: true }));
+// Bug #4: o mock agora expõe 'loading' para simular o ciclo de vida do AuthContext.
+const authState = vi.hoisted(() => ({ isAdmin: true, loading: false }));
 
 vi.mock("../auth/AuthContext", () => ({
   useAuth: () => authState,
@@ -71,6 +72,7 @@ describe("agruparItensPorDemanda", () => {
 describe("ValidacoesList", () => {
   beforeEach(() => {
     authState.isAdmin = true;
+    authState.loading = false;
     api.listPendentes.mockResolvedValue([
       itemPendente(),
       itemPendente({ id: 4, nome: "Monitor" }),
@@ -141,5 +143,26 @@ describe("ValidacoesList", () => {
     expect(screen.getByText("Acesso restrito")).toBeInTheDocument();
     expect(api.listPendentes).not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: /abrir demanda/i })).not.toBeInTheDocument();
+  });
+
+  // Bug #4: race condition — AuthContext ainda carregando não deve disparar fetch.
+  it("não chama a API enquanto o AuthContext ainda está carregando (Bug #4 - race condition)", () => {
+    authState.loading = true;
+    authState.isAdmin = false; // isAdmin=false enquanto loading
+    renderWithRouter(<ValidacoesList />);
+
+    expect(api.listPendentes).not.toHaveBeenCalled();
+    expect(api.listUnidades).not.toHaveBeenCalled();
+    expect(api.listGrupos).not.toHaveBeenCalled();
+  });
+
+  // Bug #4: após AuthContext terminar com isAdmin=true, o fetch deve ocorrer.
+  it("chama a API após o AuthContext terminar de carregar com isAdmin=true (Bug #4)", async () => {
+    authState.loading = false;
+    authState.isAdmin = true;
+    renderWithRouter(<ValidacoesList />);
+
+    await screen.findByRole("heading", { name: "Demanda #12" });
+    expect(api.listPendentes).toHaveBeenCalledTimes(1);
   });
 });

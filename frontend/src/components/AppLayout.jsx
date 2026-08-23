@@ -4,18 +4,13 @@ import Header from "./Header";
 import Sidebar from "./Sidebar";
 
 export default function AppLayout() {
+  // Bug #3: usar isAdmin diretamente do AuthContext sem recalcular os critérios de perfil.
   const { user, isAdmin, logout } = useAuth();
-  const admin = Boolean(
-    isAdmin
-      || user?.is_admin_user
-      || user?.perfil === "admin"
-      || user?.perfil === "admin_master"
-  );
 
   return (
     <div className="app-shell">
       <a className="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
-      <Sidebar user={user} isAdmin={admin} />
+      <Sidebar user={user} isAdmin={isAdmin} />
       <div className="app-main">
         <Header user={user} logout={logout} />
         <main

@@ -5,15 +5,17 @@ import AppRoutes from "./routes";
 import * as AuthModule from "./auth/AuthContext";
 import { api } from "./api/client";
 
+// listSolicitacoes e listUsuariosAdmin retornam array direto (não paginado),
+// conforme uso em AdminUsuarios.jsx: `data.results || data`.
 vi.mock("./api/client", () => ({
   api: {
     listDemandas: vi.fn().mockResolvedValue({ results: [] }),
     listDfds: vi.fn().mockResolvedValue({ results: [] }),
     dashboardStats: vi.fn(),
-    listUnidades: vi.fn().mockResolvedValue({ results: [] }),
-    listSolicitacoes: vi.fn().mockResolvedValue({ results: [] }),
-    listUsuariosAdmin: vi.fn().mockResolvedValue({ results: [] }),
-    listGrupos: vi.fn().mockResolvedValue({ results: [] }),
+    listUnidades: vi.fn().mockResolvedValue([]),
+    listSolicitacoes: vi.fn().mockResolvedValue([]),
+    listUsuariosAdmin: vi.fn().mockResolvedValue([]),
+    listGrupos: vi.fn().mockResolvedValue([]),
   },
 }));
 

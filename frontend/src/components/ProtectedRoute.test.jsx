@@ -55,10 +55,13 @@ describe("ProtectedRoute", () => {
     expect(screen.getByText("inicio")).toBeInTheDocument();
   });
 
-  it("autoriza perfil ADMIN em rota adminOnly mesmo quando is_staff é falso", () => {
+  it("autoriza perfil ADMIN em rota adminOnly quando AuthContext confirma isAdmin=true", () => {
+    // Bug #2: ProtectedRoute agora delega ao AuthContext o cálculo de isAdmin.
+    // O mock deve refletir o que o AuthContext real retornaria para perfil='admin'.
     vi.spyOn(AuthModule, "useAuth").mockReturnValue({
       user: { username: "gestor", perfil: "admin", is_staff: false },
       loading: false,
+      isAdmin: true,
     });
     renderRoute({ adminOnly: true });
     expect(screen.getByText("conteudo protegido")).toBeInTheDocument();

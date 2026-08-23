@@ -5,7 +5,8 @@ import { renderWithRouter } from "../test-utils";
 import ValidacaoDecisao from "./ValidacaoDecisao";
 import { api, ApiError } from "../api/client";
 
-const authState = vi.hoisted(() => ({ isAdmin: true }));
+// Bug #5: o mock agora expõe 'loading' para simular o ciclo de vida do AuthContext.
+const authState = vi.hoisted(() => ({ isAdmin: true, loading: false }));
 
 vi.mock("../auth/AuthContext", () => ({
   useAuth: () => authState,
@@ -61,11 +62,43 @@ function renderDecisao() {
 describe("ValidacaoDecisao", () => {
   beforeEach(() => {
     authState.isAdmin = true;
+    authState.loading = false;
     api.listPendentes.mockResolvedValue([
       itemPendente(),
       itemPendente({ id: 4, nome: "Monitor", valor_total: "1200.00" }),
     ]);
     api.decidirValidacao.mockResolvedValue({ id: 20 });
+  });
+
+  // Bug #1: garante que o filtro por demandaId é passado na chamada à API.
+  it("passa o demandaId como filtro na chamada à API (Bug #1)", async () => {
+    renderDecisao();
+
+    await screen.findByText("Notebook");
+
+    expect(api.listPendentes).toHaveBeenCalledWith({ demanda: "12" });
+    expect(api.listPendentes).toHaveBeenCalledTimes(1);
+  });
+
+  // Bug #5: garante que o fetch não dispara enquanto o AuthContext ainda carrega.
+  it("não dispara fetch enquanto o AuthContext ainda carrega (Bug #5 - race condition)", async () => {
+    authState.loading = true;
+    authState.isAdmin = false; // isAdmin=false enquanto loading
+    renderDecisao();
+
+    // Nenhuma requisição deve ter sido feita durante o carregamento
+    expect(api.listPendentes).not.toHaveBeenCalled();
+    expect(screen.queryByText("Notebook")).not.toBeInTheDocument();
+  });
+
+  // Bug #5: após o AuthContext terminar, o fetch deve ocorrer se isAdmin=true.
+  it("busca dados após o AuthContext terminar de carregar com isAdmin=true (Bug #5)", async () => {
+    authState.loading = false;
+    authState.isAdmin = true;
+    renderDecisao();
+
+    await screen.findByText("Notebook");
+    expect(api.listPendentes).toHaveBeenCalledWith({ demanda: "12" });
   });
 
   it("abre a demanda e exibe seus itens para decisão individual", async () => {

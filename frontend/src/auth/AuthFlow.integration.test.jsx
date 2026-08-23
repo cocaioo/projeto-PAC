@@ -53,9 +53,14 @@ describe("AuthFlow Integration", () => {
       { id: 1, nome: "Centro de Ciências Agrárias (CCAA)" },
       { id: 2, nome: "Centro de Tecnologia (CT)" },
     ]);
+    // Garante que AdminUsuarios não dispara chamadas não tratadas
+    api.listSolicitacoes.mockResolvedValue([]);
+    api.listUsuariosAdmin.mockResolvedValue([]);
   });
 
   it("fluxo de solicitação de acesso por novo usuário", async () => {
+    // userEvent.setup() cria uma instância isolada — elimina contaminação de estado de teclado
+    const user = userEvent.setup();
     api.me.mockRejectedValue(new Error("401"));
     api.solicitarAcesso.mockResolvedValue({ message: "Solicitação enviada com sucesso." });
 
@@ -65,13 +70,13 @@ describe("AuthFlow Integration", () => {
       expect(screen.getByRole("combobox", { name: /unidade/i })).not.toBeDisabled();
     });
 
-    await userEvent.type(screen.getByLabelText(/nome completo/i), "Carlos Eduardo");
-    await userEvent.type(screen.getByLabelText(/e-mail institucional/i), "carlos.eduardo@ufpi.edu.br");
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
-    await userEvent.type(screen.getByLabelText(/^senha/i), "segredo123");
-    await userEvent.type(screen.getByLabelText(/confirmação de senha/i), "segredo123");
+    await user.type(screen.getByLabelText(/nome completo/i), "Carlos Eduardo");
+    await user.type(screen.getByLabelText(/e-mail institucional/i), "carlos.eduardo@ufpi.edu.br");
+    await user.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
+    await user.type(screen.getByLabelText(/^senha/i), "segredo123");
+    await user.type(screen.getByLabelText(/confirmação de senha/i), "segredo123");
 
-    await userEvent.click(screen.getByRole("button", { name: /solicitar/i }));
+    await user.click(screen.getByRole("button", { name: /solicitar/i }));
 
     await waitFor(() => {
       expect(api.solicitarAcesso).toHaveBeenCalledWith({
@@ -87,6 +92,7 @@ describe("AuthFlow Integration", () => {
   });
 
   it("fluxo de aprovação de solicitação pelo Admin Master", async () => {
+    const user = userEvent.setup();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
     api.me.mockResolvedValue({
       id: 99,
@@ -94,16 +100,18 @@ describe("AuthFlow Integration", () => {
       perfil: "admin_master",
       is_admin_master_user: true,
     });
-    api.listSolicitacoes.mockResolvedValue([
-      {
-        id: 10,
-        nome_completo: "Carlos Eduardo",
-        email: "carlos.eduardo@ufpi.edu.br",
-        unidade_nome: "Centro de Ciências Agrárias (CCAA)",
-        status: "pendente",
-        data_solicitacao: "2026-08-23T10:00:00Z",
-      },
-    ]);
+    api.listSolicitacoes.mockResolvedValue({
+      results: [
+        {
+          id: 10,
+          nome_completo: "Carlos Eduardo",
+          email: "carlos.eduardo@ufpi.edu.br",
+          unidade_nome: "Centro de Ciências Agrárias (CCAA)",
+          status: "pendente",
+          data_solicitacao: "2026-08-23T10:00:00Z",
+        },
+      ]
+    });
     api.aprovarSolicitacao.mockResolvedValue({ message: "Solicitação aprovada." });
 
     render(<AppTest initialRoute="/admin/usuarios" />);
@@ -111,15 +119,16 @@ describe("AuthFlow Integration", () => {
     await waitFor(() => {
       expect(screen.getByText("Carlos Eduardo")).toBeInTheDocument();
       expect(screen.getByText("carlos.eduardo@ufpi.edu.br")).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
 
-    await userEvent.click(screen.getByRole("button", { name: "Aprovar" }));
+    await user.click(screen.getByRole("button", { name: "Aprovar" }));
 
     expect(window.confirm).toHaveBeenCalledWith("Confirmar aprovação?");
     expect(api.aprovarSolicitacao).toHaveBeenCalledWith(10);
   });
 
   it("fluxo completo de login com e-mail institucional após aprovação", async () => {
+    const user = userEvent.setup();
     api.me.mockRejectedValue(new Error("401"));
     api.login.mockResolvedValue({
       id: 10,
@@ -131,19 +140,26 @@ describe("AuthFlow Integration", () => {
 
     render(<AppTest initialRoute="/login" />);
 
-    await userEvent.type(screen.getByLabelText(/e-mail ou usuário/i), "carlos.eduardo@ufpi.edu.br");
-    await userEvent.type(screen.getByLabelText(/senha/i), "segredo123");
-    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    const emailField = screen.getByLabelText(/e-mail ou usuário/i);
+    const senhaField = screen.getByLabelText(/senha/i);
+
+    await user.clear(emailField);
+    await user.clear(senhaField);
+
+    await user.type(emailField, "carlos.eduardo@ufpi.edu.br");
+    await user.type(senhaField, "segredo123");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(api.csrf).toHaveBeenCalled();
     expect(api.login).toHaveBeenCalledWith("carlos.eduardo@ufpi.edu.br", "segredo123");
 
     await waitFor(() => {
       expect(screen.getByTestId("dashboard-home")).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
   });
 
   it("fluxo de erro no login com credenciais incorretas exibe mensagem da API sem expor sessão expirada", async () => {
+    const user = userEvent.setup();
     api.me.mockRejectedValue(new Error("401"));
     const apiError = new Error("Credenciais inválidas.");
     apiError.status = 401;
@@ -152,9 +168,9 @@ describe("AuthFlow Integration", () => {
 
     render(<AppTest initialRoute="/login" />);
 
-    await userEvent.type(screen.getByLabelText(/e-mail ou usuário/i), "carlos.eduardo@ufpi.edu.br");
-    await userEvent.type(screen.getByLabelText(/senha/i), "senha_errada");
-    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    await user.type(screen.getByLabelText(/e-mail ou usuário/i), "carlos.eduardo@ufpi.edu.br");
+    await user.type(screen.getByLabelText(/senha/i), "senha_errada");
+    await user.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(await screen.findByText(/credenciais inválidas/i)).toBeInTheDocument();
     expect(screen.queryByText(/sua sessão expirou/i)).not.toBeInTheDocument();

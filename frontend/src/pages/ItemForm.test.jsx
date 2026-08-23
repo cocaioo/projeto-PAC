@@ -16,18 +16,26 @@ vi.mock("../api/client", () => ({
   },
 }));
 
-async function preencherObrigatorios() {
-  await userEvent.type(screen.getByLabelText(/^nome$/i), "Notebook");
-  await userEvent.type(screen.getByLabelText(/descrição/i), "Notebook i5");
-  await userEvent.type(screen.getByLabelText(/unidade de medida/i), "unidade");
-  await userEvent.clear(screen.getByLabelText(/quantidade/i));
-  await userEvent.type(screen.getByLabelText(/quantidade/i), "2");
-  await userEvent.type(screen.getByLabelText(/valor estimado/i), "1500");
-  await userEvent.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
-  await userEvent.type(screen.getByLabelText(/indicação orçamentária/i), "Orc 1");
-  await userEvent.type(screen.getByLabelText(/justificativa da prioridade/i), "Alta");
-  await userEvent.type(screen.getByLabelText(/justificativa da necessidade/i), "Uso");
+// Preenche os campos obrigatórios do formulário de novo item.
+// Aceita uma instância de userEvent.setup() para garantir o isolamento correto
+// de estado de teclado entre testes — sem isso, userEvent.type() pode compor
+// caracteres fora de ordem em JSDOM (ex.: "aNçoãtoeboo" em vez de "Notebook").
+async function preencherObrigatorios(user) {
+  if (!user || user === userEvent) {
+    user = userEvent.setup();
+  }
+  await user.type(screen.getByLabelText(/^nome$/i), "Notebook");
+  await user.type(screen.getByLabelText(/descrição/i), "Notebook i5");
+  await user.type(screen.getByLabelText(/unidade de medida/i), "unidade");
+  await user.clear(screen.getByLabelText(/quantidade/i));
+  await user.type(screen.getByLabelText(/quantidade/i), "2");
+  await user.type(screen.getByLabelText(/valor estimado/i), "1500");
+  await user.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
+  await user.type(screen.getByLabelText(/indicação orçamentária/i), "Orc 1");
+  await user.type(screen.getByLabelText(/justificativa da prioridade/i), "Alta");
+  await user.type(screen.getByLabelText(/justificativa da necessidade/i), "Uso");
 }
+
 
 describe("ItemForm", () => {
   beforeEach(() => {
@@ -91,6 +99,7 @@ describe("ItemForm", () => {
   });
 
   it("mostra erro estruturado do backend no campo correto", async () => {
+    const user = userEvent.setup();
     api.addItem.mockRejectedValue({
       message: "Revise os dados informados.",
       fieldErrors: { quantidade: ["Quantidade indisponível para este ciclo."] },
@@ -99,13 +108,14 @@ describe("ItemForm", () => {
       route: "/demandas/7/itens/novo",
       path: "/demandas/:id/itens/novo",
     });
-    await preencherObrigatorios();
-    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    await preencherObrigatorios(user);
+    await user.click(screen.getByRole("button", { name: /adicionar item/i }));
     expect(await screen.findByText(/quantidade indisponível/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/quantidade/i)).toHaveAttribute("aria-describedby", "quantidade-error");
   });
 
   it("seleciona item do catálogo, preenche dados e calcula o total visual", async () => {
+    const user = userEvent.setup();
     api.listCatalogo.mockResolvedValue({
       results: [{
         id: 5,
@@ -125,23 +135,23 @@ describe("ItemForm", () => {
       extraRoutes: [{ path: "/demandas/:id", element: <p>detalhe demanda</p> }],
     });
 
-    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
-    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
-    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+    await user.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await user.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await user.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
 
     expect(screen.getByLabelText(/^nome$/i)).toHaveValue("Notebook institucional");
     expect(screen.getByLabelText(/valor estimado unitário/i)).toHaveValue(4200.5);
     expect(screen.getByText(/grupo de contratação:/i)).toHaveTextContent("TIC");
 
-    await userEvent.clear(screen.getByLabelText(/quantidade/i));
-    await userEvent.type(screen.getByLabelText(/quantidade/i), "2");
+    await user.clear(screen.getByLabelText(/quantidade/i));
+    await user.type(screen.getByLabelText(/quantidade/i), "2");
     expect(screen.getByText(/8\.401,00/)).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
-    await userEvent.type(screen.getByLabelText(/indicação orçamentária/i), "Fonte 1000");
-    await userEvent.type(screen.getByLabelText(/justificativa da prioridade/i), "Planejamento");
-    await userEvent.type(screen.getByLabelText(/justificativa da necessidade/i), "Renovação");
-    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    await user.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
+    await user.type(screen.getByLabelText(/indicação orçamentária/i), "Fonte 1000");
+    await user.type(screen.getByLabelText(/justificativa da prioridade/i), "Planejamento");
+    await user.type(screen.getByLabelText(/justificativa da necessidade/i), "Renovação");
+    await user.click(screen.getByRole("button", { name: /adicionar item/i }));
 
     await waitFor(() => expect(api.addItem).toHaveBeenCalledTimes(1));
     expect(api.addItem.mock.calls[0][1]).toMatchObject({
@@ -153,6 +163,7 @@ describe("ItemForm", () => {
   });
 
   it("adiciona item à demanda e navega de volta ao detalhe", async () => {
+    const user = userEvent.setup();
     api.addItem.mockResolvedValue({ id: 10 });
     renderWithRouter(<ItemForm />, {
       route: "/demandas/7/itens/novo",
@@ -160,8 +171,8 @@ describe("ItemForm", () => {
       extraRoutes: [{ path: "/demandas/:id", element: <p>detalhe demanda</p> }],
     });
 
-    await preencherObrigatorios();
-    await userEvent.click(
+    await preencherObrigatorios(user);
+    await user.click(
       screen.getByRole("button", { name: /adicionar item/i })
     );
 

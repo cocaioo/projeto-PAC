@@ -72,6 +72,8 @@ def demandas_no_escopo_do_usuario(queryset, usuario):
         if usuario.unidade_id:
             filtro |= Q(
                 itens__item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
+            ) | Q(
+                itens__item_catalogo__isnull=True, unidade_id=usuario.unidade_id
             )
         return queryset.filter(filtro).distinct()
     return queryset.filter(usuario=usuario)
@@ -86,6 +88,8 @@ def itens_no_escopo_do_usuario(queryset, usuario):
         if usuario.unidade_id:
             filtro |= Q(
                 item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
+            ) | Q(
+                item_catalogo__isnull=True, demanda__unidade_id=usuario.unidade_id
             )
         return queryset.filter(filtro).distinct()
     return queryset.filter(demanda__usuario=usuario)
@@ -620,7 +624,8 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
         if getattr(user, "is_admin_user", False):
             return qs.filter(
                 Q(demanda__usuario=user)
-                | Q(item_catalogo__isnull=False, item_catalogo__grupo__unidade_admin_id=user.unidade_id)
+                | Q(item_catalogo__grupo__unidade_admin_id=user.unidade_id)
+                | Q(item_catalogo__isnull=True, demanda__unidade_id=user.unidade_id)
             )
         return qs.filter(demanda__usuario=user)
 
@@ -737,36 +742,41 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
             return queryset
         if not user.unidade_id:
             return queryset.none()
-        return queryset.filter(
-            item_demanda__item_catalogo__isnull=False,
-            item_demanda__item_catalogo__grupo__unidade_admin_id=user.unidade_id,
+        filtro = Q(item_demanda__item_catalogo__grupo__unidade_admin_id=user.unidade_id)
+        filtro |= Q(
+            item_demanda__item_catalogo__isnull=True,
+            item_demanda__demanda__unidade_id=user.unidade_id
         )
+        return queryset.filter(filtro)
 
     @staticmethod
     def _itens_no_escopo_do_usuario(queryset, user):
         """Restringe ADMIN ao grupo administrado pela sua unidade.
-
-        Itens manuais nao possuem grupo que permita determinar o responsavel.
-        Por seguranca, eles ficam disponiveis somente para ADMIN MASTER.
+        Também permite que ADMIN valide itens manuais caso tenham sido
+        criados pela sua própria unidade.
         """
         if user.is_admin_master_user:
             return queryset
         if not user.unidade_id:
             return queryset.none()
-        return queryset.filter(
-            item_catalogo__isnull=False,
-            item_catalogo__grupo__unidade_admin_id=user.unidade_id,
+        filtro = Q(item_catalogo__grupo__unidade_admin_id=user.unidade_id)
+        filtro |= Q(
+            item_catalogo__isnull=True,
+            demanda__unidade_id=user.unidade_id
         )
+        return queryset.filter(filtro)
 
     @staticmethod
     def _usuario_pode_decidir_item(user, item):
         if user.is_admin_master_user:
             return True
-        return bool(
-            user.unidade_id
-            and item.item_catalogo_id
-            and item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
-        )
+        if not user.unidade_id:
+            return False
+        
+        if item.item_catalogo_id:
+            return item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
+        
+        return item.demanda.unidade_id == user.unidade_id
 
     @staticmethod
     def _filtro_id(request, nome, *aliases):

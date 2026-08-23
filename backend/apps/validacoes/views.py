@@ -60,12 +60,10 @@ def validar_item(request, item_pk):
         return redirect("demandas:lista")
 
     with transaction.atomic():
-        item = ItemDemanda.objects.select_for_update().filter(pk=item_pk).first()
+        item = ItemDemanda.objects.select_for_update().select_related("item_catalogo__grupo").filter(pk=item_pk).first()
         if item is None:
             messages.error(request, "Item nao encontrado.")
             return redirect("validacoes:lista")
-        if item.item_catalogo_id:
-            item = ItemDemanda.objects.select_related("item_catalogo__grupo").get(pk=item.pk)
         if not _usuario_pode_decidir_item(request.user, item):
             messages.error(request, "Voce nao tem permissao para validar itens deste grupo.")
             return redirect("validacoes:lista")

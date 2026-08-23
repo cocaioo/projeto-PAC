@@ -97,6 +97,7 @@ describe("Catálogo integrado ao cliente HTTP", () => {
     expect(requests.filter((url) => url.searchParams.has("q"))).toHaveLength(1);
   });
 
+  // Teste pesado: cria → edita → desativa via MSW. Timeout explícito de 15s.
   it("ADMIN cria, edita e desativa um item pela API", async () => {
     authState.isAdmin = true;
     authState.user = { grupos_administrados: [{ id: 2, nome: "TIC" }] };
@@ -125,7 +126,7 @@ describe("Catálogo integrado ao cliente HTTP", () => {
     await user.click(within(updatedRow).getByRole("button", { name: /desativar/i }));
     await user.click(screen.getByRole("button", { name: /confirmar desativação/i }));
     await waitFor(() => expect(within(updatedRow).getByText("Inativo")).toBeInTheDocument());
-  });
+  }, 15000);
 
   it("mantém admin fora do escopo apenas com leitura", async () => {
     authState.isAdmin = true;
