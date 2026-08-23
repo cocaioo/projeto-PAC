@@ -10,6 +10,10 @@ vi.mock("./api/client", () => ({
     listDemandas: vi.fn().mockResolvedValue({ results: [] }),
     listDfds: vi.fn().mockResolvedValue({ results: [] }),
     dashboardStats: vi.fn(),
+    listUnidades: vi.fn().mockResolvedValue({ results: [] }),
+    listSolicitacoes: vi.fn().mockResolvedValue({ results: [] }),
+    listUsuariosAdmin: vi.fn().mockResolvedValue({ results: [] }),
+    listGrupos: vi.fn().mockResolvedValue({ results: [] }),
   },
 }));
 
@@ -49,6 +53,22 @@ describe("AppRoutes", () => {
     expect(api.listDemandas).toHaveBeenCalled();
   });
 
+  it("renderiza a página de conta para usuário autenticado", async () => {
+    renderAt("/conta", {
+      user: {
+        username: "ana",
+        nome_completo: "Ana Silva",
+        perfil: "usuario",
+        status_conta: "ativa",
+        grupos_administrados: [],
+      },
+      loading: false,
+      isAdmin: false,
+      isAdminMaster: false,
+    });
+    expect(await screen.findByRole("heading", { name: "Ana Silva" })).toBeInTheDocument();
+  });
+
   it.each(["/validacoes", "/dfds", "/dfds/consolidar"])(
     "bloqueia acesso direto à URL administrativa %s para usuário comum",
     (path) => {
@@ -74,5 +94,30 @@ describe("AppRoutes", () => {
       isAdmin: true,
     });
     expect(await screen.findByRole("heading", { name: "DFDs" })).toBeInTheDocument();
+  });
+
+  it("mostra a página de Solicitar Acesso publicamente", () => {
+    renderAt("/solicitar-acesso", { user: null, loading: false, isAdmin: false, isAdminMaster: false });
+    expect(screen.getByRole("heading", { name: /solicitar acesso/i })).toBeInTheDocument();
+  });
+
+  it("bloqueia /admin/usuarios para admin comum", () => {
+    renderAt("/admin/usuarios", {
+      user: { username: "admin", perfil: "admin" },
+      loading: false,
+      isAdmin: true,
+      isAdminMaster: false,
+    });
+    expect(screen.getByText(/plano anual de contratações da ufpi/i)).toBeInTheDocument();
+  });
+
+  it("autoriza /admin/usuarios para admin master", async () => {
+    renderAt("/admin/usuarios", {
+      user: { username: "master", perfil: "admin_master" },
+      loading: false,
+      isAdmin: true,
+      isAdminMaster: true,
+    });
+    expect(await screen.findByRole("heading", { name: /gestão de usuários/i })).toBeInTheDocument();
   });
 });

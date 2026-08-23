@@ -28,6 +28,9 @@ export default function Header({ user, logout }) {
                   : user.is_admin_user ? "Administrador" : "Usuário")}
             </span>
           </div>
+          <Link className="pac-button pac-button--secondary pac-button--sm" to="/conta">
+            <i className="bi bi-person-circle" aria-hidden="true" /> Minha conta
+          </Link>
           <Button variant="secondary" size="sm" onClick={handleLogout}>
             <i className="bi bi-box-arrow-right" aria-hidden="true" /> Sair
           </Button>

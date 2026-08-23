@@ -45,4 +45,11 @@ describe("Login", () => {
       await screen.findByText(/credenciais inválidas/i)
     ).toBeInTheDocument();
   });
+
+  it("possui link para solicitar acesso", () => {
+    renderWithRouter(<Login />, { route: "/login", path: "/login" });
+    const link = screen.getByRole("link", { name: /solicitar acesso/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/solicitar-acesso");
+  });
 });

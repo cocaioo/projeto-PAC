@@ -176,5 +176,13 @@ export const api = {
   ),
   consolidarDfd: (body) => request("/dfds/consolidar/", { method: "POST", body }),
 
+  solicitarAcesso: (body) => request("/auth/solicitar-acesso/", { method: "POST", body }),
+  listSolicitacoes: (query) => request("/admin/solicitacoes/", { query }),
+  aprovarSolicitacao: (id) => request(`/admin/solicitacoes/${id}/aprovar/`, { method: "POST" }),
+  rejeitarSolicitacao: (id, body) => request(`/admin/solicitacoes/${id}/rejeitar/`, { method: "POST", body }),
+  listUsuariosAdmin: (query) => request("/admin/usuarios/", { query }),
+  createUsuarioAdmin: (body) => request("/admin/usuarios/", { method: "POST", body }),
+  updateUsuarioStatus: (id, body) => request(`/admin/usuarios/${id}/status/`, { method: "PATCH", body }),
+
   dashboardStats: () => request("/dashboard/stats/"),
 };

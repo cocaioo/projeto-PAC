@@ -257,7 +257,7 @@ export default function DemandaList() {
                             #{demanda.id}
                           </Link>
                         </td>
-                        <td>{demanda.unidade_sigla || "-"}</td>
+                        <td>{demanda.unidade_nome || demanda.unidade_sigla || "-"}</td>
                         <td>{demanda.ano_referencia}</td>
                         <td>
                           <StatusBadge status={demanda.status} />

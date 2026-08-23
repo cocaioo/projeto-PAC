@@ -1,15 +1,21 @@
 import { Link, NavLink } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 
 const userLinks = [
   { to: "/", label: "Início", icon: "bi-house" },
   { to: "/demandas", label: "Demandas", icon: "bi-file-earmark-text" },
   { to: "/catalogo", label: "Catálogo", icon: "bi-box-seam" },
   { to: "/dashboard", label: "Indicadores", icon: "bi-bar-chart" },
+  { to: "/conta", label: "Minha conta", icon: "bi-person" },
 ];
 
 const adminLinks = [
   { to: "/validacoes", label: "Demandas para validar", icon: "bi-check2-square" },
   { to: "/dfds", label: "Documentos DFD", icon: "bi-collection" },
+];
+
+const adminMasterLinks = [
+  { to: "/admin/usuarios", label: "Gestão de Usuários", icon: "bi-people" },
 ];
 
 function MenuLink({ item }) {
@@ -22,6 +28,7 @@ function MenuLink({ item }) {
 }
 
 export default function Sidebar({ user, isAdmin }) {
+  const { isAdminMaster } = useAuth();
   return (
     <aside className="app-sidebar" aria-label="Navegação principal">
       <Link className="app-brand" to="/">
@@ -36,6 +43,12 @@ export default function Sidebar({ user, isAdmin }) {
           <>
             <div className="app-sidebar__section">Administração</div>
             {adminLinks.map((item) => <MenuLink item={item} key={item.to} />)}
+          </>
+        )}
+        {isAdminMaster && (
+          <>
+            <div className="app-sidebar__section">Admin Master</div>
+            {adminMasterLinks.map((item) => <MenuLink item={item} key={item.to} />)}
           </>
         )}
       </nav>

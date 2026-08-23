@@ -58,11 +58,23 @@ export default function Login() {
                 />
               <Button
                 type="submit"
-                className="w-100"
+                className="w-100 mb-2"
                 loading={enviando}
               >
                 {enviando ? "Entrando..." : "Entrar"}
               </Button>
+              <div className="text-center mt-3">
+                <a
+                  href="/solicitar-acesso"
+                  className="text-decoration-none"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate("/solicitar-acesso");
+                  }}
+                >
+                  Solicitar acesso / Criar conta
+                </a>
+              </div>
             </form>
           </Card>
         </div>

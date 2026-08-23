@@ -4,14 +4,14 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import * as AuthModule from "../auth/AuthContext";
 
-function renderRoute({ adminOnly = false } = {}) {
+function renderRoute({ adminOnly = false, adminMasterOnly = false } = {}) {
   return render(
     <MemoryRouter initialEntries={["/privado"]}>
       <Routes>
         <Route
           path="/privado"
           element={
-            <ProtectedRoute adminOnly={adminOnly}>
+            <ProtectedRoute adminOnly={adminOnly} adminMasterOnly={adminMasterOnly}>
               <p>conteudo protegido</p>
             </ProtectedRoute>
           }
@@ -72,5 +72,38 @@ describe("ProtectedRoute", () => {
     });
     renderRoute({ adminOnly: true });
     expect(screen.getByText("inicio")).toBeInTheDocument();
+  });
+
+  it("bloqueia usuǭrio comum em rota adminMasterOnly", () => {
+    vi.spyOn(AuthModule, "useAuth").mockReturnValue({
+      user: { username: "ana", perfil: "usuario", is_staff: false },
+      loading: false,
+      isAdmin: false,
+      isAdminMaster: false,
+    });
+    renderRoute({ adminMasterOnly: true });
+    expect(screen.getByText("inicio")).toBeInTheDocument();
+  });
+
+  it("bloqueia admin comum em rota adminMasterOnly", () => {
+    vi.spyOn(AuthModule, "useAuth").mockReturnValue({
+      user: { username: "ana", perfil: "admin", is_staff: false },
+      loading: false,
+      isAdmin: true,
+      isAdminMaster: false,
+    });
+    renderRoute({ adminMasterOnly: true });
+    expect(screen.getByText("inicio")).toBeInTheDocument();
+  });
+
+  it("autoriza admin_master em rota adminMasterOnly", () => {
+    vi.spyOn(AuthModule, "useAuth").mockReturnValue({
+      user: { username: "gestor_master", perfil: "admin_master", is_staff: false },
+      loading: false,
+      isAdmin: true,
+      isAdminMaster: true,
+    });
+    renderRoute({ adminMasterOnly: true });
+    expect(screen.getByText("conteudo protegido")).toBeInTheDocument();
   });
 });

@@ -303,7 +303,7 @@ export default function DemandaDetail() {
       <Card title="Dados da demanda" className="mb-4">
         <dl className="row mb-0">
           <dt className="col-sm-3">Unidade</dt>
-          <dd className="col-sm-9">{demanda.unidade_sigla || "—"}</dd>
+          <dd className="col-sm-9">{demanda.unidade_nome || demanda.unidade_sigla || "—"}</dd>
           <dt className="col-sm-3">Ano de referência</dt>
           <dd className="col-sm-9">{demanda.ano_referencia}</dd>
           <dt className="col-sm-3">Responsável</dt>
