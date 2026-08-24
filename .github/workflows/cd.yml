@@ -19,9 +19,92 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  verify-quality:
+    name: Gates de qualidade antes da publicação
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pac_cd
+          POSTGRES_USER: pac_user
+          POSTGRES_PASSWORD: pac_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pac_user -d pac_cd"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://pac_user:pac_password@localhost:5432/pac_cd
+      DJANGO_SECRET_KEY: cd-test-only-key
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar e testar backend
+        working-directory: backend
+        run: |
+          pip install -r ../requirements.txt
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Testar e construir frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run build
+
+  verify-containers:
+    name: Validação integrada das imagens
+    runs-on: ubuntu-latest
+    needs: verify-quality
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar configuração efêmera
+        run: cp .env.example .env
+
+      - name: Construir e subir a composição
+        run: docker compose up -d --build --wait
+
+      - name: Executar smoke tests
+        run: |
+          curl --fail --retry 10 --retry-connrefused http://localhost/
+          curl --fail --retry 10 --retry-connrefused http://localhost/api/auth/csrf/
+
+      - name: Publicar diagnóstico
+        if: always()
+        run: docker compose ps && docker compose logs --no-color --tail=200
+
+      - name: Encerrar serviços efêmeros
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
   build-and-push-backend:
     name: Build e publicação da imagem do Backend
     runs-on: ubuntu-latest
+    needs: verify-containers
     permissions:
       contents: read
       packages: write
@@ -66,6 +149,7 @@ jobs:
   build-and-push-frontend:
     name: Build e publicação da imagem do Frontend
     runs-on: ubuntu-latest
+    needs: verify-containers
     permissions:
       contents: read
       packages: write

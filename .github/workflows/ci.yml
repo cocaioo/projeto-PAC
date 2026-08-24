@@ -238,6 +238,9 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      - name: Preparar configuração efêmera dos containers
+        run: cp .env.example .env
+
       - name: Subir serviços e aguardar healthchecks
         run: docker compose up -d --build --wait
 
