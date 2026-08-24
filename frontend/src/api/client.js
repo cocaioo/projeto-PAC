@@ -206,7 +206,10 @@ export const api = {
 
   solicitarAcesso: (body) => request("/auth/solicitar-acesso/", { method: "POST", body }),
   listSolicitacoes: (query) => request("/admin/solicitacoes/", { query }),
-  aprovarSolicitacao: (id) => request(`/admin/solicitacoes/${id}/aprovar/`, { method: "POST" }),
+  aprovarSolicitacao: (id, body) => request(
+    `/admin/solicitacoes/${id}/aprovar/`,
+    { method: "POST", ...(body === undefined ? {} : { body }) }
+  ),
   rejeitarSolicitacao: (id, body) => request(`/admin/solicitacoes/${id}/rejeitar/`, { method: "POST", body }),
   listUsuariosAdmin: (query) => request("/admin/usuarios/", { query }),
   createUsuarioAdmin: (body) => request("/admin/usuarios/", { method: "POST", body }),

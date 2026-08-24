@@ -26,6 +26,7 @@ vi.mock("../api/client", async () => {
       createUsuarioAdmin: vi.fn(),
       updateUsuarioStatus: vi.fn(),
       listUnidades: vi.fn(),
+      listGrupos: vi.fn(),
     },
   };
 });
@@ -56,6 +57,7 @@ describe("AuthFlow Integration", () => {
     // Garante que AdminUsuarios não dispara chamadas não tratadas
     api.listSolicitacoes.mockResolvedValue([]);
     api.listUsuariosAdmin.mockResolvedValue([]);
+    api.listGrupos.mockResolvedValue([]);
   });
 
   it("fluxo de solicitação de acesso por novo usuário", async () => {
@@ -122,9 +124,12 @@ describe("AuthFlow Integration", () => {
     }, { timeout: 10000 });
 
     await user.click(screen.getByRole("button", { name: "Aprovar" }));
+    await user.click(screen.getByRole("button", { name: /Confirmar aprovação/i }));
 
-    expect(window.confirm).toHaveBeenCalledWith("Confirmar aprovação?");
-    expect(api.aprovarSolicitacao).toHaveBeenCalledWith(10);
+    expect(api.aprovarSolicitacao).toHaveBeenCalledWith(10, {
+      perfil: "usuario",
+      grupos_administrados: [],
+    });
   });
 
   it("fluxo completo de login com e-mail institucional após aprovação", async () => {

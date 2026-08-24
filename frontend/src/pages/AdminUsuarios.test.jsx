@@ -33,6 +33,7 @@ describe("AdminUsuarios", () => {
     api.listSolicitacoes.mockResolvedValue([]);
     api.listUsuariosAdmin.mockResolvedValue([]);
     api.listUnidades.mockResolvedValue([{ id: 1, nome: "Unidade A" }]);
+    api.listGrupos.mockResolvedValue([]);
     
     // Mock window.confirm
     vi.spyOn(window, "confirm").mockImplementation(() => true);
@@ -59,10 +60,41 @@ describe("AdminUsuarios", () => {
       expect(screen.getByText("João")).toBeInTheDocument();
     });
 
-    api.aprovarSolicitacao.mockResolvedValue({});
+    api.listGrupos.mockResolvedValue([
+      { id: 42, nome: "TIC", unidade_admin_sigla: "STI", ativo: true },
+      { id: 43, nome: "Grupo inativo", ativo: false },
+    ]);
     await testUser.click(screen.getByText("Aprovar"));
-    expect(window.confirm).toHaveBeenCalledWith("Confirmar aprovação?");
-    expect(api.aprovarSolicitacao).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(screen.getByLabelText(/Permissão \/ perfil/i)).toBeInTheDocument());
+    await testUser.selectOptions(screen.getByLabelText(/Permissão \/ perfil/i), "admin");
+    await waitFor(() => expect(screen.getByRole("option", { name: /TIC \(STI\)/i })).toBeInTheDocument());
+    await testUser.selectOptions(screen.getByLabelText(/Grupo de contratação/i), "42");
+
+    api.aprovarSolicitacao.mockResolvedValue({});
+    await testUser.click(screen.getByRole("button", { name: /Confirmar aprovação/i }));
+    expect(api.aprovarSolicitacao).toHaveBeenCalledWith(1, {
+      perfil: "admin",
+      grupos_administrados: [42],
+    });
+  });
+
+  it("exige grupo ao escolher o perfil de administrador", async () => {
+    api.listSolicitacoes.mockResolvedValue([
+      { id: 2, nome_completo: "Ana", email: "ana@ufpi.br", unidade_nome: "CCAA", status: "pendente", data_solicitacao: "2023-01-01T10:00:00Z" },
+    ]);
+    api.listGrupos.mockResolvedValue([{ id: 10, nome: "Compras", ativo: true }]);
+
+    renderWithRouter(<AdminUsuarios />);
+    await waitFor(() => expect(screen.getByText("Ana")).toBeInTheDocument());
+    await testUser.click(screen.getByText("Aprovar"));
+    await testUser.selectOptions(await screen.findByLabelText(/Permissão \/ perfil/i), "admin");
+    await waitFor(() => expect(screen.getByRole("option", { name: "Compras" })).toBeInTheDocument());
+
+    expect(screen.getByRole("button", { name: /Confirmar aprovação/i })).toBeEnabled();
+    await testUser.click(screen.getByRole("button", { name: /Confirmar aprovação/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/selecione o grupo de contratação/i);
+    expect(api.aprovarSolicitacao).not.toHaveBeenCalled();
   });
 
   it("permite rejeitar solicitação com justificativa", async () => {

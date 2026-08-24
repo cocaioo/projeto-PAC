@@ -53,6 +53,13 @@ function TabSolicitacoes() {
   const [acaoId, setAcaoId] = useState(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [showRejeitar, setShowRejeitar] = useState(false);
+  const [solicitacaoAprovar, setSolicitacaoAprovar] = useState(null);
+  const [perfilAprovacao, setPerfilAprovacao] = useState("usuario");
+  const [grupoAprovacao, setGrupoAprovacao] = useState("");
+  const [grupos, setGrupos] = useState([]);
+  const [carregandoGrupos, setCarregandoGrupos] = useState(false);
+  const [erroAprovacao, setErroAprovacao] = useState("");
+  const [aprovando, setAprovando] = useState(false);
 
   const carregar = () => {
     setLoading(true);
@@ -66,13 +73,48 @@ function TabSolicitacoes() {
     carregar();
   }, [statusFiltro]);
 
-  const aprovar = async (id) => {
-    if (!window.confirm("Confirmar aprovação?")) return;
+  const abrirAprovacao = (solicitacao) => {
+    setSolicitacaoAprovar(solicitacao);
+    setPerfilAprovacao("usuario");
+    setGrupoAprovacao("");
+    setGrupos([]);
+    setErroAprovacao("");
+    setCarregandoGrupos(true);
+    api.listGrupos({ ativo: true })
+      .then(data => {
+        const lista = data?.results || data || [];
+        setGrupos(lista.filter(grupo => grupo.ativo !== false));
+      })
+      .catch(err => setErroAprovacao(err.message))
+      .finally(() => setCarregandoGrupos(false));
+  };
+
+  const fecharAprovacao = () => {
+    if (aprovando) return;
+    setSolicitacaoAprovar(null);
+    setErroAprovacao("");
+  };
+
+  const confirmarAprovacao = async () => {
+    if (!solicitacaoAprovar) return;
+    if (perfilAprovacao === "admin" && !grupoAprovacao) {
+      setErroAprovacao("Selecione o grupo de contratação do administrador.");
+      return;
+    }
+
+    const payload = {
+      perfil: perfilAprovacao,
+      grupos_administrados: perfilAprovacao === "admin" ? [Number(grupoAprovacao)] : [],
+    };
+    setAprovando(true);
     try {
-      await api.aprovarSolicitacao(id);
+      await api.aprovarSolicitacao(solicitacaoAprovar.id, payload);
+      setSolicitacaoAprovar(null);
       carregar();
     } catch (err) {
-      alert("Erro ao aprovar: " + err.message);
+      setErroAprovacao("Erro ao aprovar: " + err.message);
+    } finally {
+      setAprovando(false);
     }
   };
 
@@ -133,7 +175,7 @@ function TabSolicitacoes() {
                 <td>
                   {s.status === 'pendente' && (
                     <>
-                      <button className="btn btn-sm btn-success me-2" onClick={() => aprovar(s.id)}>Aprovar</button>
+                      <button className="btn btn-sm btn-success me-2" onClick={() => abrirAprovacao(s)}>Aprovar</button>
                       <button className="btn btn-sm btn-danger" onClick={() => { setAcaoId(s.id); setMotivoRejeicao(""); setShowRejeitar(true); }}>Rejeitar</button>
                     </>
                   )}
@@ -163,6 +205,97 @@ function TabSolicitacoes() {
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowRejeitar(false)}>Cancelar</button>
                 <button type="button" className="btn btn-danger" onClick={confirmarRejeicao}>Confirmar Rejeição</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {solicitacaoAprovar && (
+        <div
+          className="modal"
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="aprovar-solicitacao-titulo"
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2 className="modal-title h5" id="aprovar-solicitacao-titulo">Definir acesso do usuário</h2>
+                <button type="button" className="btn-close" onClick={fecharAprovacao} disabled={aprovando} aria-label="Fechar"></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Escolha a permissão para <strong>{solicitacaoAprovar.nome_completo}</strong> antes de aprovar a solicitação.
+                </p>
+
+                <div className="mb-3">
+                  <label className="form-label" htmlFor="perfil-aprovacao">Permissão / perfil</label>
+                  <select
+                    id="perfil-aprovacao"
+                    className="form-select"
+                    value={perfilAprovacao}
+                    onChange={event => {
+                      setPerfilAprovacao(event.target.value);
+                      setGrupoAprovacao("");
+                      setErroAprovacao("");
+                    }}
+                    disabled={aprovando}
+                  >
+                    <option value="usuario">Usuário</option>
+                    <option value="admin">Administrador de grupo</option>
+                    <option value="admin_master">Admin Master</option>
+                  </select>
+                </div>
+
+                {perfilAprovacao === "admin" && (
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="grupo-aprovacao">Grupo de contratação</label>
+                    <select
+                      id="grupo-aprovacao"
+                      className="form-select"
+                      value={grupoAprovacao}
+                      onChange={event => {
+                        setGrupoAprovacao(event.target.value);
+                        setErroAprovacao("");
+                      }}
+                      disabled={carregandoGrupos || aprovando}
+                      required
+                    >
+                      <option value="">
+                        {carregandoGrupos ? "Carregando grupos..." : "Selecione o grupo..."}
+                      </option>
+                      {grupos.map(grupo => (
+                        <option key={grupo.id} value={grupo.id}>
+                          {grupo.nome}{grupo.unidade_admin_sigla ? ` (${grupo.unidade_admin_sigla})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {!carregandoGrupos && grupos.length === 0 && (
+                      <div className="form-text text-danger">Nenhum grupo de contratação ativo foi encontrado.</div>
+                    )}
+                  </div>
+                )}
+
+                {perfilAprovacao === "admin_master" && (
+                  <div className="alert alert-info py-2">
+                    O Admin Master terá permissão administrativa global e não precisa de grupo.
+                  </div>
+                )}
+
+                {erroAprovacao && <div className="alert alert-danger" role="alert">{erroAprovacao}</div>}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={fecharAprovacao} disabled={aprovando}>Cancelar</button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={confirmarAprovacao}
+                  disabled={aprovando || carregandoGrupos || (perfilAprovacao === "admin" && grupos.length === 0)}
+                >
+                  {aprovando ? "Aprovando..." : "Confirmar aprovação"}
+                </button>
               </div>
             </div>
           </div>

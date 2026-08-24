@@ -245,10 +245,13 @@ describe("api client", () => {
     );
 
     global.fetch = mockFetch(200, { message: "ok" });
-    await api.aprovarSolicitacao(5);
+    await api.aprovarSolicitacao(5, { perfil: "admin", grupos_administrados: [2] });
     expect(global.fetch).toHaveBeenLastCalledWith(
       expect.stringContaining("/admin/solicitacoes/5/aprovar/"),
-      expect.objectContaining({ method: "POST" })
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ perfil: "admin", grupos_administrados: [2] }),
+      })
     );
 
     await api.rejeitarSolicitacao(5, { motivo_rejeicao: "Motivo" });
