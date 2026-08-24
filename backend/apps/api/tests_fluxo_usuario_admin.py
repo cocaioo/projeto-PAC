@@ -44,8 +44,8 @@ class FluxoUsuarioAdminValidacaoTests(APITestCase):
         self.admin_tic.grupos_administrados.add(self.grupo_tic)
         self.admin_outro = self._usuario("admin_outro_fluxo", self.unidade_solicitante, "admin")
         self.admin_outro.grupos_administrados.add(self.grupo_outro)
-        self.admin_da_unidade = self._usuario(
-            "admin_unidade_fluxo", self.unidade_solicitante, "admin"
+        self.admin_sem_grupo = self._usuario(
+            "admin_sem_grupo_fluxo", self.unidade_solicitante, "admin"
         )
 
     @staticmethod
@@ -161,7 +161,7 @@ class FluxoUsuarioAdminValidacaoTests(APITestCase):
         )
         self.assertEqual(decisao.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_item_manual_e_roteado_para_admin_da_unidade_solicitante(self):
+    def test_item_manual_nao_e_roteado_por_mera_coincidencia_de_unidade(self):
         demanda_id, item_id = self._criar_e_enviar_item_manual()
 
         self.client.force_login(self.admin_tic)
@@ -170,8 +170,14 @@ class FluxoUsuarioAdminValidacaoTests(APITestCase):
         )
         self.assertEqual(fora_do_escopo.data, [])
 
-        self.client.force_login(self.admin_da_unidade)
+        self.client.force_login(self.admin_sem_grupo)
         pendentes = self.client.get(reverse("api:validacao-pendentes"), {"demanda": demanda_id})
-        self.assertEqual([item["id"] for item in pendentes.data], [item_id])
-        self.assertTrue(pendentes.data[0]["item_manual"])
-        self.assertIsNone(pendentes.data[0]["grupo_id"])
+        self.assertEqual(pendentes.status_code, status.HTTP_200_OK)
+        self.assertEqual(pendentes.data, [])
+
+        decisao = self.client.post(
+            reverse("api:validacao-decidir"),
+            {"item_demanda": item_id, "acao": "validado", "comentario": ""},
+            format="json",
+        )
+        self.assertEqual(decisao.status_code, status.HTTP_403_FORBIDDEN)

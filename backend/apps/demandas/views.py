@@ -204,6 +204,7 @@ def item_reenviar(request, pk):
     return redirect("demandas:detalhe", pk=item.demanda_id)
 
 
+@require_POST
 @login_required
 def demanda_enviar(request, pk):
     with transaction.atomic():

@@ -46,6 +46,8 @@ class AutorizacaoEscopoBase(APITestCase):
         self.grupo_b = GrupoContratacao.objects.create(
             nome="Grupo de escopo B", unidade_admin=self.unidade_admin_b
         )
+        self.admin_a.grupos_administrados.add(self.grupo_a)
+        self.admin_b.grupos_administrados.add(self.grupo_b)
         self.catalogo_a = self._catalogo("AUT-A", self.grupo_a)
         self.catalogo_b = self._catalogo("AUT-B", self.grupo_b)
 
@@ -226,7 +228,7 @@ class CatalogoEscopoEscritaTests(AutorizacaoEscopoBase):
             "ativo": True,
         }
 
-    def test_admin_so_cria_no_grupo_administrado_por_sua_unidade(self):
+    def test_admin_so_cria_no_grupo_explicitamente_administrado(self):
         self._login(self.admin_a)
 
         permitido = self.client.post(
@@ -425,18 +427,18 @@ class DemandaEscopoAdministrativoTests(AutorizacaoEscopoBase):
         self.assertNotEqual(self.item_misto_a.status, StatusItemDemanda.CANCELADA)
         self.assertNotEqual(self.item_misto_b.status, StatusItemDemanda.CANCELADA)
 
-    def test_admin_da_unidade_solicitante_pode_cancelar_demanda_so_manual(self):
-        admin_solicitante = self._usuario(
-            "admin_manual", self.usuario_b.unidade, perfil="admin"
+    def test_admin_sem_grupo_nao_herda_escopo_da_unidade_para_demanda_manual(self):
+        admin_sem_grupo = self._usuario(
+            "admin_sem_grupo_manual", self.usuario_b.unidade, perfil="admin"
         )
-        self._login(admin_solicitante)
+        self._login(admin_sem_grupo)
         resposta = self.client.post(
             reverse("api:demanda-cancelar", kwargs={"pk": self.demanda_manual.pk})
         )
 
-        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual(resposta.status_code, status.HTTP_404_NOT_FOUND)
         self.demanda_manual.refresh_from_db()
-        self.assertEqual(self.demanda_manual.status, StatusDemanda.CANCELADA)
+        self.assertNotEqual(self.demanda_manual.status, StatusDemanda.CANCELADA)
 
     def test_admin_pode_cancelar_demanda_composta_so_por_seu_grupo(self):
         self._login(self.admin_a)

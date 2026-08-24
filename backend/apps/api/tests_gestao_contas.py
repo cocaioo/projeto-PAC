@@ -203,6 +203,7 @@ class GestaoContasTestCase(APITestCase):
             "unidade_id": self.unidade.id,
             "perfil": Perfil.ADMIN,
             "senha_temporaria": "temp_senha",
+            "grupos_administrados": [self.grupo_tic.id],
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 201)
@@ -212,6 +213,25 @@ class GestaoContasTestCase(APITestCase):
         self.assertEqual(novo_admin.perfil, Perfil.ADMIN)
         self.assertTrue(novo_admin.is_active)
         self.assertTrue(novo_admin.check_password("temp_senha"))
+        self.assertEqual(
+            list(novo_admin.grupos_administrados.values_list("id", flat=True)),
+            [self.grupo_tic.id],
+        )
+
+    def test_criar_usuario_admin_sem_grupo_rejeitado_fail_closed(self):
+        self.client.force_login(self.admin_master)
+        response = self.client.post(reverse("api:admin-usuarios"), {
+            "nome_completo": "Admin Sem Grupo",
+            "email": "admin_sem_grupo@ufpi.edu.br",
+            "unidade_id": self.unidade.id,
+            "perfil": Perfil.ADMIN,
+            "senha_temporaria": "temp_senha",
+            "grupos_administrados": [],
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("grupos_administrados", response.data)
+        self.assertFalse(User.objects.filter(email="admin_sem_grupo@ufpi.edu.br").exists())
 
     def test_criar_usuario_admin_master_e_usuario_comum(self):
         self.client.force_login(self.admin_master)
@@ -438,6 +458,7 @@ class GestaoContasTestCase(APITestCase):
             "unidade_id": self.unidade.id,
             "perfil": Perfil.ADMIN,
             "senha_temporaria": "TempSecret123!",
+            "grupos_administrados": [self.grupo_tic.id],
         })
         self.assertEqual(res_create.status_code, 201)
         self.client.logout()

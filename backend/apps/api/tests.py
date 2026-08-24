@@ -12,6 +12,7 @@ from unittest import mock
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -293,7 +294,8 @@ class ValidacaoTests(APITestCase):
         )
         self.demanda = Demanda.objects.create(
             unidade=self.unidade, usuario=self.user, ano_referencia=2027,
-            status=StatusDemanda.AGUARDANDO_VALIDACAO
+            status=StatusDemanda.AGUARDANDO_VALIDACAO,
+            enviada_em=timezone.now(),
         )
         self.item = ItemDemanda.objects.create(
             demanda=self.demanda, tipo="material", nome="Cadeira", quantidade=5,
@@ -730,6 +732,7 @@ class ServerSideIntegrationTests(APITestCase):
             nome="Grupo administrativo",
             unidade_admin=self.unidade_admin,
         )
+        self.admin.grupos_administrados.add(self.grupo)
         self.catalogo = ItemCatalogo.objects.create(
             tipo="material",
             nome="Monitor catalogado",
@@ -751,7 +754,11 @@ class ServerSideIntegrationTests(APITestCase):
             justificativa_necessidade="Uso necessário",
         )
         self.client.force_login(self.user)
-        resp = self.client.post(reverse("demandas:enviar", kwargs={"pk": self.demanda.pk}))
+        enviar_url = reverse("demandas:enviar", kwargs={"pk": self.demanda.pk})
+        get_resp = self.client.get(enviar_url)
+        self.assertEqual(get_resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        resp = self.client.post(enviar_url)
         self.assertEqual(resp.status_code, status.HTTP_302_FOUND)
         self.demanda.refresh_from_db()
         self.assertEqual(self.demanda.status, StatusDemanda.AGUARDANDO_VALIDACAO)
@@ -1102,6 +1109,7 @@ class CatalogoDashboardTests(APITestCase):
             unidade_medida="un", valor_estimado=Decimal("500"), ativo=False,
         )
         admin_user = criar_usuario("cat_admin", unidade=self.unidade, is_staff=True, perfil="admin")
+        admin_user.grupos_administrados.add(self.grupo)
 
         self.client.force_login(self.user)
         resp_grupo = self.client.get(reverse("api:catalogo-list"), {"grupo": outro_grupo.pk})
@@ -1140,6 +1148,7 @@ class CatalogoDashboardTests(APITestCase):
 
     def test_admin_gerencia_catalogo_e_ativa_desativa(self):
         admin_user = criar_usuario("cat_admin2", unidade=self.unidade, is_staff=True, perfil="admin")
+        admin_user.grupos_administrados.add(self.grupo)
         self.client.force_login(admin_user)
 
         criar = self.client.post(reverse("api:catalogo-list"), {
@@ -1216,6 +1225,11 @@ class ItemDevolvidoRedPoliticaAcessoTests(APITestCase):
         self.grupo = GrupoContratacao.objects.create(
             nome="TIC", unidade_admin=self.unidade_admin
         )
+        self.admin_grupo.grupos_administrados.add(self.grupo)
+        grupo_outro_admin = GrupoContratacao.objects.create(
+            nome="Outro grupo", unidade_admin=self.unidade_outro_admin
+        )
+        self.admin_outro_grupo.grupos_administrados.add(grupo_outro_admin)
         self.catalogo = ItemCatalogo.objects.create(
             tipo="material", nome="Notebook catalogado", descricao="Cat",
             grupo=self.grupo, unidade_medida="un", valor_estimado=Decimal("1000")

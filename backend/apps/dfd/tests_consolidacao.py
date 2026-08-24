@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -19,12 +20,14 @@ class ConsolidacaoAPITests(APITestCase):
         self.grupo = GrupoContratacao.objects.create(nome="TIC", unidade_admin=self.unidade_admin)
         self.catalogo = ItemCatalogo.objects.create(tipo="material", nome="Notebook", descricao="", grupo=self.grupo, unidade_medida="unidade", valor_estimado=Decimal("10"))
         self.admin = Usuario.objects.create_user(username="admin", email="admin@example.com", siape="1", first_name="Admin", perfil=Perfil.ADMIN, unidade=self.unidade_admin)
+        self.admin.grupos_administrados.add(self.grupo)
         self.usuario = Usuario.objects.create_user(username="usuario", email="usuario@example.com", siape="2", first_name="Usuario", unidade=self.unidade_solicitante)
         self.demanda = Demanda.objects.create(
             unidade=self.unidade_solicitante,
             usuario=self.usuario,
             ano_referencia=2027,
             status=StatusDemanda.EM_ANDAMENTO,
+            enviada_em=timezone.now(),
         )
         self.item = self.criar_item("Elegivel", StatusItemDemanda.VALIDADA, 3)
 
@@ -34,6 +37,7 @@ class ConsolidacaoAPITests(APITestCase):
             usuario=usuario or self.usuario,
             ano_referencia=ano,
             status=StatusDemanda.EM_ANDAMENTO,
+            enviada_em=timezone.now(),
         )
 
     def criar_item(self, nome, status, quantidade, *, demanda=None, catalogado=True):

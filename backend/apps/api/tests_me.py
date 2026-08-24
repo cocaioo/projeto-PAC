@@ -45,6 +45,7 @@ class UsuarioAutenticadoViewTests(APITestCase):
             unidade=self.unidade_admin,
             perfil=Perfil.ADMIN,
         )
+        self.admin.grupos_administrados.add(self.grupo_tic)
         self.usuario = Usuario.objects.create_user(
             username="usuario.bce",
             password="senha-segura",
@@ -82,7 +83,7 @@ class UsuarioAutenticadoViewTests(APITestCase):
         self.assertEqual(resposta.data["email"], "usuario.bce@ufpi.edu.br")
         self.assertNotEqual(resposta.data["id"], self.admin.id)
 
-    def test_retorna_contexto_de_autorizacao_do_admin_baseado_na_unidade(self):
+    def test_retorna_contexto_de_autorizacao_do_admin_baseado_em_grupo_explicito(self):
         self.client.force_login(self.admin)
         resposta = self.client.get(reverse("api:me"))
 
@@ -103,16 +104,38 @@ class UsuarioAutenticadoViewTests(APITestCase):
         self.assertFalse(resposta.data["escopo_administrativo_global"])
         self.assertEqual(
             [grupo["nome"] for grupo in resposta.data["grupos_administrados"]],
-            ["Software e Licencas", "TIC"],
+            ["TIC"],
         )
         self.assertEqual(
             [grupo["id"] for grupo in resposta.data["grupos_associados"]],
-            [self.grupo_software.id, self.grupo_tic.id],
+            [self.grupo_tic.id],
+        )
+        self.assertNotIn(
+            self.grupo_software.id,
+            [grupo["id"] for grupo in resposta.data["grupos_administrados"]],
         )
         self.assertNotIn(
             self.outro_grupo.id,
             [grupo["id"] for grupo in resposta.data["grupos_administrados"]],
         )
+
+    def test_admin_sem_grupo_nao_herda_grupos_da_unidade(self):
+        admin_sem_grupo = Usuario.objects.create_user(
+            username="admin.sem.grupo",
+            password="senha-segura",
+            email="admin.sem.grupo@ufpi.edu.br",
+            first_name="Admin sem grupo",
+            siape="1002",
+            unidade=self.unidade_admin,
+            perfil=Perfil.ADMIN,
+        )
+        self.client.force_login(admin_sem_grupo)
+
+        resposta = self.client.get(reverse("api:me"))
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual(resposta.data["grupos_administrados"], [])
+        self.assertEqual(resposta.data["grupos_associados"], [])
 
     def test_usuario_comum_nao_recebe_grupos_administrados(self):
         self.client.force_login(self.usuario)

@@ -3,6 +3,7 @@ from enum import StrEnum
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from apps.auditoria.models import LogAuditoria
 from apps.demandas.models import (
     Demanda,
     ItemDemanda,
@@ -80,10 +81,12 @@ def _usuario_admin_do_grupo(usuario, item) -> bool:
         return False
     if getattr(usuario, "is_admin_master_user", False):
         return False
-    if not usuario.unidade_id:
-        return False
     if item.item_catalogo_id is None:
-        return item.demanda.unidade_id == usuario.unidade_id
+        return bool(
+            usuario.unidade_id
+            and usuario.grupos_administrados.filter(ativo=True).exists()
+            and item.demanda.unidade_id == usuario.unidade_id
+        )
     grupo = getattr(getattr(item, "item_catalogo", None), "grupo", None)
     return bool(grupo and usuario.pode_administrar_grupo(grupo))
 
@@ -245,4 +248,16 @@ def reenviar_item_devolvido(*, item_id: int, usuario) -> ItemDemanda:
         item.status = StatusItemDemanda.AGUARDANDO_VALIDACAO
         item.save(update_fields=["status", "atualizado_em"])
         sincronizar_status_macro_demanda(demanda)
+        LogAuditoria.objects.create(
+            usuario=usuario,
+            acao="item_reenviado_validacao",
+            modelo="ItemDemanda",
+            objeto_id=item.id,
+            dados_anteriores={"status": StatusItemDemanda.DEVOLVIDA},
+            dados_novos={
+                "status": item.status,
+                "demanda_id": demanda.id,
+                "grupo_id": item.item_catalogo.grupo_id if item.item_catalogo_id else None,
+            },
+        )
         return item

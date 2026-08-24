@@ -21,6 +21,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.auditoria.models import LogAuditoria
 from apps.catalogo.models import ItemCatalogo
 from apps.demandas.constants import pode_transicionar_demanda, pode_transicionar_item
 from apps.demandas.models import Demanda, ItemDemanda, StatusDemanda, StatusItemDemanda
@@ -84,12 +85,15 @@ def demandas_no_escopo_do_usuario(queryset, usuario):
         return queryset
     if getattr(usuario, "is_admin_user", False):
         filtro = Q(usuario=usuario)
-        if not usuario.is_admin_master_user:
-            filtro |= usuario.filtro_grupos_administrados("itens__item_catalogo__grupo")
+        if usuario.grupos_administrados.filter(ativo=True).exists():
+            escopo_administrativo = usuario.filtro_grupos_administrados(
+                "itens__item_catalogo__grupo"
+            )
             if usuario.unidade_id:
-                filtro |= Q(
+                escopo_administrativo |= Q(
                     itens__item_catalogo__isnull=True, unidade_id=usuario.unidade_id
                 )
+            filtro |= ~Q(status=StatusDemanda.RASCUNHO) & escopo_administrativo
         return queryset.filter(filtro).distinct()
     return queryset.filter(usuario=usuario)
 
@@ -100,12 +104,15 @@ def itens_no_escopo_do_usuario(queryset, usuario):
         return queryset
     if getattr(usuario, "is_admin_user", False):
         filtro = Q(demanda__usuario=usuario)
-        if not usuario.is_admin_master_user:
-            filtro |= usuario.filtro_grupos_administrados("item_catalogo__grupo")
+        if usuario.grupos_administrados.filter(ativo=True).exists():
+            escopo_administrativo = usuario.filtro_grupos_administrados(
+                "item_catalogo__grupo"
+            )
             if usuario.unidade_id:
-                filtro |= Q(
+                escopo_administrativo |= Q(
                     item_catalogo__isnull=True, demanda__unidade_id=usuario.unidade_id
                 )
+            filtro |= ~Q(demanda__status=StatusDemanda.RASCUNHO) & escopo_administrativo
         return queryset.filter(filtro).distinct()
     return queryset.filter(demanda__usuario=usuario)
 
@@ -339,7 +346,10 @@ class DemandaViewSet(viewsets.ModelViewSet):
             Demanda.objects.select_related("unidade", "usuario")
             .prefetch_related(itens_prefetch)
         )
-        return demandas_no_escopo_do_usuario(qs, user)
+        qs = demandas_no_escopo_do_usuario(qs, user)
+        if str(self.request.query_params.get("proprias", "")).lower() in {"1", "true", "sim"}:
+            qs = qs.filter(usuario=user)
+        return qs
 
     def perform_create(self, serializer):
         unidade = getattr(self.request.user, "unidade", None)
@@ -360,14 +370,17 @@ class DemandaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if demanda.usuario_id == user.id or user.is_admin_master_user:
             return True
-        if not user.is_admin_user or not user.unidade_id:
+        if (
+            not user.is_admin_user
+            or not user.grupos_administrados.filter(ativo=True).exists()
+        ):
             return False
-        itens_no_escopo = Q(
-            user.filtro_grupos_administrados("item_catalogo__grupo")
-        ) | Q(
-            item_catalogo__isnull=True,
-            demanda__unidade_id=user.unidade_id,
-        )
+        itens_no_escopo = user.filtro_grupos_administrados("item_catalogo__grupo")
+        if user.unidade_id:
+            itens_no_escopo |= Q(
+                item_catalogo__isnull=True,
+                demanda__unidade_id=user.unidade_id,
+            )
         return not demanda.itens.exclude(itens_no_escopo).exists()
 
     def update(self, request, *args, **kwargs):
@@ -490,7 +503,17 @@ class DemandaViewSet(viewsets.ModelViewSet):
             demanda.save(update_fields=["enviada_em", "atualizado_em"])
             demanda.itens.update(status=StatusItemDemanda.AGUARDANDO_VALIDACAO)
             sincronizar_status_macro_demanda(demanda)
-            return Response(DemandaSerializer(demanda).data)
+            LogAuditoria.objects.create(
+                usuario=request.user,
+                acao="demanda_enviada_validacao",
+                modelo="Demanda",
+                objeto_id=demanda.id,
+                dados_novos={
+                    "status": demanda.status,
+                    "item_ids": list(demanda.itens.values_list("id", flat=True)),
+                },
+            )
+            return Response(DemandaSerializer(demanda, context={"request": request}).data)
 
     @action(detail=True, methods=["post"])
     def cancelar(self, request, pk=None):
@@ -516,6 +539,11 @@ class DemandaViewSet(viewsets.ModelViewSet):
             if demanda.status == StatusDemanda.CONCLUIDA:
                 return Response(
                     {"detail": "Solicitações concluídas não podem ser canceladas."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if demanda.itens.filter(status=StatusItemDemanda.VINCULADA_DFD).exists():
+                return Response(
+                    {"detail": "Demandas com itens vinculados a DFD não podem ser canceladas."},
                     status=status.HTTP_409_CONFLICT,
                 )
 
@@ -664,7 +692,7 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
         return ItemDemandaSerializer
 
     def get_queryset(self):
-        from django.db.models import Prefetch, Q
+        from django.db.models import Prefetch
         from apps.validacoes.models import Validacao, TipoAcao
 
         ultima_devolucao_prefetch = Prefetch(
@@ -681,15 +709,7 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
             .prefetch_related(ultima_devolucao_prefetch)
         )
         user = self.request.user
-        if getattr(user, "is_admin_master_user", False):
-            return qs
-        if getattr(user, "is_admin_user", False):
-            return qs.filter(
-                Q(demanda__usuario=user)
-                | user.filtro_grupos_administrados("item_catalogo__grupo")
-                | Q(item_catalogo__isnull=True, demanda__unidade_id=user.unidade_id)
-            )
-        return qs.filter(demanda__usuario=user)
+        return itens_no_escopo_do_usuario(qs, user)
 
     def retrieve(self, request, *args, **kwargs):
         item = self.get_object()
@@ -808,7 +828,7 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         if user.is_admin_master_user:
             return queryset
-        if not user.grupos_administrados.exists() and not user.unidade_id:
+        if not user.grupos_administrados.filter(ativo=True).exists():
             return queryset.none()
         filtro = user.filtro_grupos_administrados("item_demanda__item_catalogo__grupo")
         if user.unidade_id:
@@ -826,7 +846,7 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
         """
         if user.is_admin_master_user:
             return queryset
-        if not user.grupos_administrados.exists() and not user.unidade_id:
+        if not user.grupos_administrados.filter(ativo=True).exists():
             return queryset.none()
         filtro = user.filtro_grupos_administrados("item_catalogo__grupo")
         if user.unidade_id:
@@ -840,6 +860,8 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
     def _usuario_pode_decidir_item(user, item):
         if user.is_admin_master_user:
             return True
+        if not user.grupos_administrados.filter(ativo=True).exists():
+            return False
         if item.item_catalogo_id:
             return user.pode_administrar_grupo(item.item_catalogo.grupo)
         
@@ -891,7 +913,12 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
         )
         itens = (
             ItemDemanda.objects.filter(
-                status=StatusItemDemanda.AGUARDANDO_VALIDACAO
+                status=StatusItemDemanda.AGUARDANDO_VALIDACAO,
+                demanda__enviada_em__isnull=False,
+                demanda__status__in=(
+                    StatusDemanda.AGUARDANDO_VALIDACAO,
+                    StatusDemanda.EM_ANDAMENTO,
+                ),
             )
             .select_related(
                 "demanda",
@@ -972,6 +999,18 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+            if (
+                demanda_locked.enviada_em is None
+                or demanda_locked.status not in {
+                    StatusDemanda.AGUARDANDO_VALIDACAO,
+                    StatusDemanda.EM_ANDAMENTO,
+                }
+            ):
+                return Response(
+                    {"detail": "A demanda não está em um estado válido para decisão."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
             if demanda_locked.status in [StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA]:
                 return Response(
                     {"detail": "Não é permitido alterar solicitações encerradas ou canceladas."},
@@ -1008,6 +1047,19 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
                 comentario=comentario,
             )
             sincronizar_status_macro_demanda(demanda_locked)
+            LogAuditoria.objects.create(
+                usuario=request.user,
+                acao=f"item_{acao}",
+                modelo="ItemDemanda",
+                objeto_id=item.id,
+                dados_anteriores={"status": StatusItemDemanda.AGUARDANDO_VALIDACAO},
+                dados_novos={
+                    "status": novo_status,
+                    "demanda_id": demanda_locked.id,
+                    "grupo_id": item.item_catalogo.grupo_id if item.item_catalogo_id else None,
+                    "comentario": comentario,
+                },
+            )
             return Response(
                 ValidacaoSerializer(validacao).data, status=status.HTTP_201_CREATED
             )

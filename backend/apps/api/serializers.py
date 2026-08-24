@@ -106,12 +106,7 @@ class UsuarioMeSerializer(serializers.ModelSerializer):
         if obj.is_admin_master_user or not obj.is_admin_user:
             return []
         grupos = GrupoContratacao.objects.select_related("unidade_admin")
-        if obj.grupos_administrados.exists():
-            grupos = grupos.filter(administradores=obj)
-        elif obj.unidade_id:
-            grupos = grupos.filter(unidade_admin_id=obj.unidade_id)
-        else:
-            return []
+        grupos = grupos.filter(administradores=obj, ativo=True)
         grupos = grupos.order_by("nome")
         return GrupoContratacaoResumoSerializer(grupos, many=True).data
 
@@ -413,6 +408,7 @@ class DemandaSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     valor_total = serializers.SerializerMethodField()
     historico = serializers.SerializerMethodField()
+    pode_editar = serializers.SerializerMethodField()
 
     class Meta:
         model = Demanda
@@ -420,12 +416,16 @@ class DemandaSerializer(serializers.ModelSerializer):
             "id", "unidade", "unidade_sigla", "usuario", "usuario_nome",
             "ano_referencia", "status", "status_display", "observacao",
             "enviada_em", "criado_em", "atualizado_em", "itens", "valor_total",
-            "historico",
+            "historico", "pode_editar",
         ]
         read_only_fields = ["unidade", "usuario", "status", "enviada_em"]
 
     def get_valor_total(self, obj):
         return sum((item.valor_total for item in obj.itens.all()), start=0)
+
+    def get_pode_editar(self, obj):
+        request = self.context.get("request")
+        return bool(request and request.user.is_authenticated and obj.usuario_id == request.user.id)
 
     def get_historico(self, obj):
         eventos = []
@@ -627,6 +627,10 @@ class CriarUsuarioAdminSerializer(serializers.Serializer):
         attrs['grupos_administrados'] = grupos
         if len(grupos) != len(set(grupos)):
             raise serializers.ValidationError({"grupos_administrados": "Não repita grupos de contratação."})
+        if attrs['perfil'] == Perfil.ADMIN and not grupos:
+            raise serializers.ValidationError({
+                "grupos_administrados": "Admin deve possuir ao menos um grupo de contratação."
+            })
         if attrs['perfil'] != Perfil.ADMIN and grupos:
             raise serializers.ValidationError({
                 "grupos_administrados": "Apenas usuários com perfil admin podem receber grupos."

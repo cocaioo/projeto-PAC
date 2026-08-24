@@ -90,22 +90,21 @@ class Usuario(AbstractUser):
         if not self.is_admin_user or grupo is None:
             return False
         grupo_id = getattr(grupo, "pk", grupo)
-        if self.grupos_administrados.exists():
-            return self.grupos_administrados.filter(pk=grupo_id).exists()
-        return bool(self.unidade_id and grupo.unidade_admin_id == self.unidade_id)
+        return self.grupos_administrados.filter(pk=grupo_id, ativo=True).exists()
 
     def filtro_grupos_administrados(self, lookup):
-        """Retorna o filtro de escopo, preservando admins legados sem M2M."""
+        """Retorna o filtro fail-closed dos grupos explicitamente administrados."""
         if self.is_admin_master_user:
             return Q()
         if not self.is_admin_user:
             return Q(pk__in=[])
         relation_prefix = f"{lookup}__" if lookup else ""
-        if self.grupos_administrados.exists():
-            return Q(**{f"{relation_prefix}administradores": self})
-        if self.unidade_id:
-            return Q(**{f"{relation_prefix}unidade_admin_id": self.unidade_id})
-        return Q(pk__in=[])
+        return Q(
+            **{
+                f"{relation_prefix}administradores": self,
+                f"{relation_prefix}ativo": True,
+            }
+        )
 
     def __str__(self):
         return self.first_name

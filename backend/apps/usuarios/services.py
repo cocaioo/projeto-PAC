@@ -170,9 +170,7 @@ def rejeitar_solicitacao(solicitacao_id, admin_master_user, justificativa=""):
 
 @transaction.atomic
 def criar_usuario_admin(admin_master_user, nome_completo, email, unidade, perfil, senha_temporaria, grupos_ids=None):
-    grupos = _validar_escopo_administrativo(
-        perfil, grupos_ids, exigir_grupo_admin=False
-    )
+    grupos = _validar_escopo_administrativo(perfil, grupos_ids)
         
     if Usuario.objects.filter(email=email).exists():
         raise ValidationError("Já existe um usuário com este e-mail.")
