@@ -65,13 +65,13 @@ GRUPOS = (
         "servicos",
         "Serviços Homologação",
         "Serviços continuados e apoio às atividades institucionais.",
-        "biblioteca",
+        "prad",
     ),
     (
         "permanentes",
         "Equipamentos Permanentes Homologação",
         "Equipamentos permanentes não classificados como TIC.",
-        "ct",
+        "prad",
     ),
 )
 
@@ -82,10 +82,11 @@ USUARIOS_BASE = (
     ("admin_teste", "Gestor", "TIC", "admin", "sti", True),
     ("admin_outro_grupo", "Gestora", "Infraestrutura", "admin", "preuni", True),
     ("admin_almoxarifado", "Gestor", "Almoxarifado", "admin", "prad", True),
-    ("admin_servicos", "Gestora", "Serviços", "admin", "biblioteca", True),
-    ("admin_permanentes", "Gestor", "Permanentes", "admin", "ct", True),
+    ("admin_servicos", "Gestora", "Serviços", "admin", "prad", True),
+    ("admin_permanentes", "Gestor", "Permanentes", "admin", "prad", True),
     ("admin_master_teste", "Gestora", "Master", "admin_master", "sti", True),
 )
+
 
 
 def _catalogo(codigo, tipo, nome, descricao, grupo, unidade, valor, ativo=True):
