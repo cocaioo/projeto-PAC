@@ -236,9 +236,10 @@ describe("fluxo administrativo — contratos de regressão pré-correção", () 
         </MemoryRouter>
       );
 
-      expect(screen.getByText("Área do requisitante")).toBeInTheDocument();
+      expect(screen.queryByText("Área do requisitante")).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /minhas demandas/i })).not.toBeInTheDocument();
       expect(screen.getByText("Administração")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /minhas demandas/i })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: /todas as demandas/i })).toHaveAttribute(
         "href",
         "/demandas"
       );

@@ -1,9 +1,15 @@
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
-const userLinks = [
+const commonLinks = [
   { to: "/", label: "Início", icon: "bi-house" },
+];
+
+const userLinks = [
   { to: "/demandas", label: "Minhas demandas", icon: "bi-file-earmark-text" },
+];
+
+const sharedLinks = [
   { to: "/catalogo", label: "Catálogo", icon: "bi-box-seam" },
   { to: "/dashboard", label: "Indicadores", icon: "bi-bar-chart" },
   { to: "/conta", label: "Minha conta", icon: "bi-person" },
@@ -11,6 +17,7 @@ const userLinks = [
 
 const adminLinks = [
   { to: "/validacoes", label: "Pendências de validação", icon: "bi-check2-square" },
+  { to: "/demandas", label: "Todas as Demandas", icon: "bi-files" },
   { to: "/dfds", label: "Documentos DFD", icon: "bi-collection" },
 ];
 
@@ -37,19 +44,29 @@ export default function Sidebar({ user, isAdmin }) {
       </Link>
       <nav className="app-sidebar__nav">
         <div className="app-sidebar__section">Principal</div>
-        <MenuLink item={userLinks[0]} />
-        {user && (
+        {commonLinks.map((item) => <MenuLink item={item} key={item.to} />)}
+        
+        {user && !isAdmin && (
           <>
             <div className="app-sidebar__section">Área do requisitante</div>
-            {userLinks.slice(1).map((item) => <MenuLink item={item} key={item.to} />)}
+            {userLinks.map((item) => <MenuLink item={item} key={item.to} />)}
           </>
         )}
+        
         {isAdmin && (
           <>
             <div className="app-sidebar__section">Administração</div>
             {adminLinks.map((item) => <MenuLink item={item} key={item.to} />)}
           </>
         )}
+
+        {user && (
+          <>
+            <div className="app-sidebar__section">Geral</div>
+            {sharedLinks.map((item) => <MenuLink item={item} key={item.to} />)}
+          </>
+        )}
+
         {isAdminMaster && (
           <>
             <div className="app-sidebar__section">Admin Master</div>
