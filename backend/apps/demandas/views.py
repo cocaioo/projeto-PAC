@@ -148,10 +148,11 @@ def item_update(request, pk):
 
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
+            demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
             item = form.save(commit=False)
+            item.demanda = demanda_locked
             item.valor_total = Decimal(item.quantidade) * item.valor_estimado
             item.save()
-            demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
             sincronizar_status_macro_demanda(demanda_locked)
 
         messages.success(request, "Item atualizado.")

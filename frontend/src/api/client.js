@@ -9,6 +9,9 @@ const DEFAULT_MESSAGES = {
   404: "O conteúdo solicitado não foi encontrado.",
   409: "A operação não pode ser concluída no estado atual.",
   500: "Ocorreu um erro interno. Tente novamente em instantes.",
+  502: "O servidor nao respondeu. Tente novamente em instantes.",
+  503: "O servidor nao respondeu. Tente novamente em instantes.",
+  504: "O servidor nao respondeu. Tente novamente em instantes.",
 };
 
 const TECHNICAL_DETAIL = /(traceback|stack\s*trace|exception|file\s+".+",\s+line|\bat\s+\w+[.(])/iu;
@@ -62,6 +65,11 @@ export function extractFieldErrors(data) {
 }
 
 function safeServerMessage(data) {
+  if (typeof data === "string") {
+    const cleaned = cleanMessageString(data);
+    if (!cleaned || /<\/?[a-z][^>]*>/iu.test(cleaned) || TECHNICAL_DETAIL.test(cleaned)) return "";
+    return cleaned;
+  }
   if (!data || typeof data !== "object") return "";
   let candidate = data.detail || data.message || data.error;
   if (!candidate && Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
@@ -141,10 +149,12 @@ export async function request(
   if (response.status === 204) return null;
 
   let data = null;
+  let responseText = "";
   try {
-    data = await response.json();
+    responseText = await response.text();
+    data = responseText ? JSON.parse(responseText) : null;
   } catch {
-    data = null;
+    data = responseText;
   }
 
   if (!response.ok) throw parseApiError(response.status, data);

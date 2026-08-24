@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import redirect, render
 
 from apps.demandas.constants import pode_transicionar_item
@@ -16,8 +17,8 @@ def _itens_no_escopo_do_admin(queryset, user):
     if not user.unidade_id:
         return queryset.none()
     return queryset.filter(
-        item_catalogo__isnull=False,
-        item_catalogo__grupo__unidade_admin_id=user.unidade_id,
+        Q(item_catalogo__grupo__unidade_admin_id=user.unidade_id)
+        | Q(item_catalogo__isnull=True, demanda__unidade_id=user.unidade_id)
     )
 
 
@@ -26,8 +27,16 @@ def _usuario_pode_decidir_item(user, item):
         return True
     return bool(
         user.unidade_id
-        and item.item_catalogo_id
-        and item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
+        and (
+            (
+                item.item_catalogo_id
+                and item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
+            )
+            or (
+                not item.item_catalogo_id
+                and item.demanda.unidade_id == user.unidade_id
+            )
+        )
     )
 
 
@@ -60,15 +69,20 @@ def validar_item(request, item_pk):
         return redirect("demandas:lista")
 
     with transaction.atomic():
-        item = ItemDemanda.objects.select_for_update().select_related("item_catalogo__grupo").filter(pk=item_pk).first()
-        if item is None:
+        item_ref = ItemDemanda.objects.filter(pk=item_pk).values("demanda_id").first()
+        if item_ref is None:
             messages.error(request, "Item nao encontrado.")
             return redirect("validacoes:lista")
+        demanda_locked = Demanda.objects.select_for_update().get(pk=item_ref["demanda_id"])
+        item = (
+            ItemDemanda.objects.select_for_update(of=("self",))
+            .select_related("demanda", "item_catalogo__grupo")
+            .get(pk=item_pk, demanda_id=demanda_locked.pk)
+        )
         if not _usuario_pode_decidir_item(request.user, item):
             messages.error(request, "Voce nao tem permissao para validar itens deste grupo.")
             return redirect("validacoes:lista")
 
-        demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
         if demanda_locked.status in [StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA]:
             messages.error(request, "Nao e permitido alterar solicitacoes encerradas ou canceladas.")
             return redirect("validacoes:lista")

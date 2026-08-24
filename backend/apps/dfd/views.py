@@ -96,18 +96,19 @@ def dfd_consolidar(request):
             return redirect("dfds:consolidar")
 
         with transaction.atomic():
-            itens = list(
-                ItemDemanda.objects.select_for_update()
-                .select_related("item_catalogo__grupo", "demanda__ciclo_pac")
-                .filter(id__in=item_ids)
-            )
-            if len(itens) != len(item_ids):
+            item_refs = list(ItemDemanda.objects.filter(id__in=item_ids).values("id", "demanda_id"))
+            if len(item_refs) != len(item_ids):
                 messages.error(request, "Um ou mais itens selecionados nao foram encontrados.")
                 return redirect("dfds:consolidar")
 
-            demanda_ids = sorted(set(item.demanda_id for item in itens))
+            demanda_ids = sorted({item["demanda_id"] for item in item_refs})
             demandas_locked = list(
                 Demanda.objects.select_for_update().filter(id__in=demanda_ids).order_by("id")
+            )
+            itens = list(
+                ItemDemanda.objects.select_for_update(of=("self",))
+                .select_related("item_catalogo__grupo", "demanda__ciclo_pac")
+                .filter(id__in=item_ids).order_by("id")
             )
 
             for demanda in demandas_locked:

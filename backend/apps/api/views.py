@@ -9,6 +9,7 @@ sobre endpoints JSON.
 from django.contrib.auth import authenticate, login, logout
 from django.db import transaction
 from django.db.models import Count, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.middleware.csrf import get_token
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -172,6 +173,15 @@ class UnidadeViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsAdminMasterUserPermission()]
         return [AllowAny()]
 
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Esta unidade possui registros vinculados. Desative-a em vez de exclui-la."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
 
 class GrupoContratacaoViewSet(viewsets.ModelViewSet):
     queryset = GrupoContratacao.objects.select_related("unidade_admin").all()
@@ -181,6 +191,15 @@ class GrupoContratacaoViewSet(viewsets.ModelViewSet):
         if self.action in {"create", "update", "partial_update", "destroy"}:
             return [IsAuthenticated(), IsAdminMasterUserPermission()]
         return [IsAuthenticated()]
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Este grupo possui registros vinculados. Desative-o em vez de exclui-lo."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class ItemCatalogoViewSet(viewsets.ModelViewSet):
@@ -220,6 +239,15 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         self._validar_grupo_para_mutacao(instance.grupo)
         instance.delete()
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Este item possui demandas vinculadas. Desative-o em vez de exclui-lo."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -321,9 +349,13 @@ class DemandaViewSet(viewsets.ModelViewSet):
             return True
         if not user.is_admin_user or not user.unidade_id:
             return False
-        return not demanda.itens.exclude(
+        itens_no_escopo = Q(
             item_catalogo__grupo__unidade_admin_id=user.unidade_id
-        ).exists()
+        ) | Q(
+            item_catalogo__isnull=True,
+            demanda__unidade_id=user.unidade_id,
+        )
+        return not demanda.itens.exclude(itens_no_escopo).exists()
 
     def update(self, request, *args, **kwargs):
         demanda = self.get_object()
@@ -356,7 +388,13 @@ class DemandaViewSet(viewsets.ModelViewSet):
                 {"detail": "Somente demandas em rascunho podem ser excluídas."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return super().destroy(request, *args, **kwargs)
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Esta demanda possui registros vinculados e nao pode ser excluida."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
     @action(detail=True, methods=["get", "post"])
     def itens(self, request, pk=None):
@@ -534,7 +572,13 @@ class ItemDemandaViewSetLegacy(viewsets.ModelViewSet):
 
         with transaction.atomic():
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
-            response = super().destroy(request, *args, **kwargs)
+            try:
+                response = super().destroy(request, *args, **kwargs)
+            except ProtectedError:
+                return Response(
+                    {"detail": "Este item possui registros vinculados e nao pode ser excluido."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             sincronizar_status_macro_demanda(demanda_locked)
             return response
 
@@ -700,7 +744,13 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
-            response = super().destroy(request, *args, **kwargs)
+            try:
+                response = super().destroy(request, *args, **kwargs)
+            except ProtectedError:
+                return Response(
+                    {"detail": "Este item possui registros vinculados e nao pode ser excluido."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             sincronizar_status_macro_demanda(demanda_locked)
             return response
 
@@ -874,12 +924,20 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
             # Nao usa select_related no lock porque item_catalogo e anulavel;
             # no PostgreSQL, FOR UPDATE sobre o lado anulavel de um OUTER JOIN
             # e rejeitado. As relacoes de escopo sao carregadas sob a transacao.
-            item = ItemDemanda.objects.select_for_update().filter(pk=item_id).first()
+            item_ref = ItemDemanda.objects.filter(pk=item_id).values("demanda_id").first()
+            item = None if item_ref is None else ItemDemanda.objects.filter(pk=item_id).first()
             if item is None:
                 return Response(
                     {"detail": "Item não encontrado."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
+
+            demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
+            item = (
+                ItemDemanda.objects.select_for_update(of=("self",))
+                .select_related("demanda", "item_catalogo__grupo__unidade_admin")
+                .get(pk=item_id, demanda_id=demanda_locked.pk)
+            )
 
             if not self._usuario_pode_decidir_item(request.user, item):
                 return Response(
@@ -892,7 +950,6 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-            demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
             if demanda_locked.status in [StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA]:
                 return Response(
                     {"detail": "Não é permitido alterar solicitações encerradas ou canceladas."},
@@ -1035,6 +1092,11 @@ class ConsolidarDFDView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         with transaction.atomic():
+            item_refs = list(ItemDemanda.objects.filter(id__in=item_ids).values("id", "demanda_id"))
+            if len(item_refs) != len(item_ids):
+                return Response({"detail": "Um ou mais itens nao foram encontrados."}, status=status.HTTP_400_BAD_REQUEST)
+            demanda_ids = sorted({item["demanda_id"] for item in item_refs})
+            list(Demanda.objects.select_for_update().filter(id__in=demanda_ids).order_by("id"))
             itens = list(
                 ItemDemanda.objects.select_for_update(of=("self",))
                 .select_related("item_catalogo", "item_catalogo__grupo", "demanda__ciclo_pac")
@@ -1051,7 +1113,7 @@ class ConsolidarDFDView(APIView):
                     {"detail": "Todos os itens catalogados devem pertencer ao grupo informado."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            demandas = list(Demanda.objects.select_for_update().filter(id__in={item.demanda_id for item in itens}).order_by("id"))
+            demandas = list(Demanda.objects.filter(id__in=demanda_ids).order_by("id"))
             if any(d.status in [StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA] for d in demandas):
                 return Response({"detail": "Solicitacao encerrada ou cancelada."}, status=status.HTTP_409_CONFLICT)
             if any(not pode_transicionar_item(item.status, StatusItemDemanda.VINCULADA_DFD) for item in itens):
@@ -1134,17 +1196,25 @@ class DFDViewSet(viewsets.ModelViewSet):
             )
 
         with transaction.atomic():
-            itens = list(ItemDemanda.objects.select_for_update().filter(id__in=item_ids))
-            if len(itens) != len(item_ids):
+            item_refs = list(ItemDemanda.objects.filter(id__in=item_ids).values("id", "demanda_id"))
+            itens = None if len(item_refs) != len(item_ids) else list(
+                ItemDemanda.objects.filter(id__in=item_ids)
+            )
+            if itens is None:
                 return Response(
                     {"detail": "Um ou mais itens não foram encontrados."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # Ordena e bloqueia deterministicamente as demandas afetadas por ID para evitar deadlock
-            demanda_ids = sorted(set(item.demanda_id for item in itens))
+            demanda_ids = sorted({item["demanda_id"] for item in item_refs})
             demandas_locked = list(
                 Demanda.objects.select_for_update().filter(id__in=demanda_ids).order_by("id")
+            )
+            itens = list(
+                ItemDemanda.objects.select_for_update(of=("self",))
+                .select_related("item_catalogo", "item_catalogo__grupo")
+                .filter(id__in=item_ids).order_by("id")
             )
 
             for demanda in demandas_locked:

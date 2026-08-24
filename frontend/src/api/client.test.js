@@ -5,7 +5,7 @@ function mockFetch(status, data, ok = status < 400) {
   return vi.fn().mockResolvedValue({
     ok,
     status,
-    json: async () => data,
+    text: async () => (data === null ? "" : JSON.stringify(data)),
   });
 }
 
@@ -47,6 +47,32 @@ describe("api client", () => {
 
     expect(error.message).toBe("Você não tem permissão para realizar esta ação.");
     expect(error.message).not.toMatch(/grupo 42|unidade do operador/i);
+  });
+
+  it("usa texto simples quando a API nao devolve JSON", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => "Dados invalidos.",
+    });
+
+    await expect(api.get("/x/")).rejects.toMatchObject({
+      message: "Dados invalidos.",
+      status: 400,
+    });
+  });
+
+  it("mantem mensagem generica para HTML de infraestrutura", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => "<html><body>Bad Gateway</body></html>",
+    });
+
+    await expect(api.get("/x/")).rejects.toMatchObject({
+      message: "O servidor nao respondeu. Tente novamente em instantes.",
+      status: 502,
+    });
   });
 
   it("retorna null em respostas 204", async () => {

@@ -80,10 +80,12 @@ def _usuario_admin_do_grupo(usuario, item) -> bool:
         return False
     if getattr(usuario, "is_admin_master_user", False):
         return False
-    if item.item_catalogo_id is None:
+    if not usuario.unidade_id:
         return False
+    if item.item_catalogo_id is None:
+        return item.demanda.unidade_id == usuario.unidade_id
     grupo = getattr(getattr(item, "item_catalogo", None), "grupo", None)
-    return bool(grupo and usuario.unidade_id and grupo.unidade_admin_id == usuario.unidade_id)
+    return bool(grupo and grupo.unidade_admin_id == usuario.unidade_id)
 
 
 def verificar_acesso_item_demanda(*, usuario, item, operacao: OperacaoItemDemanda) -> None:
@@ -125,30 +127,34 @@ def sincronizar_status_macro_demanda(demanda: Demanda) -> str:
     cancelados, o MVP preserva o status macro anterior nao terminal ate
     definicao formal da regra de dominio.
     """
-    if demanda.status in STATUS_DEMANDA_TERMINAIS:
-        return demanda.status
+    with transaction.atomic():
+        demanda_locked = Demanda.objects.select_for_update().get(pk=demanda.pk)
+        if demanda_locked.status in STATUS_DEMANDA_TERMINAIS:
+            demanda.status = demanda_locked.status
+            return demanda.status
 
-    todos_status = list(demanda.itens.values_list("status", flat=True))
-    if not todos_status:
-        novo_status = StatusDemanda.RASCUNHO
-    else:
-        ativos = [s for s in todos_status if s != StatusItemDemanda.CANCELADA]
-        if not ativos:
-            novo_status = demanda.status
-        elif all(s == StatusItemDemanda.RASCUNHO for s in ativos):
+        todos_status = list(demanda_locked.itens.values_list("status", flat=True))
+        if not todos_status:
             novo_status = StatusDemanda.RASCUNHO
-        elif all(s == StatusItemDemanda.AGUARDANDO_VALIDACAO for s in ativos):
-            novo_status = StatusDemanda.AGUARDANDO_VALIDACAO
-        elif all(s == StatusItemDemanda.VINCULADA_DFD for s in ativos):
-            novo_status = StatusDemanda.CONCLUIDA
         else:
-            novo_status = StatusDemanda.EM_ANDAMENTO
+            ativos = [s for s in todos_status if s != StatusItemDemanda.CANCELADA]
+            if not ativos:
+                novo_status = demanda_locked.status
+            elif all(s == StatusItemDemanda.RASCUNHO for s in ativos):
+                novo_status = StatusDemanda.RASCUNHO
+            elif all(s == StatusItemDemanda.AGUARDANDO_VALIDACAO for s in ativos):
+                novo_status = StatusDemanda.AGUARDANDO_VALIDACAO
+            elif all(s == StatusItemDemanda.VINCULADA_DFD for s in ativos):
+                novo_status = StatusDemanda.CONCLUIDA
+            else:
+                novo_status = StatusDemanda.EM_ANDAMENTO
 
-    if demanda.status != novo_status:
-        demanda.status = novo_status
-        demanda.save(update_fields=["status", "atualizado_em"])
+        if demanda_locked.status != novo_status:
+            demanda_locked.status = novo_status
+            demanda_locked.save(update_fields=["status", "atualizado_em"])
 
-    return demanda.status
+        demanda.status = demanda_locked.status
+        return demanda.status
 
 
 def validar_item_para_envio(item) -> dict:

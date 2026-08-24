@@ -219,7 +219,10 @@ class ValidacaoEscopoTests(APITestCase):
         self.item_grupo_a.refresh_from_db()
         self.assertEqual(self.item_grupo_a.status, StatusItemDemanda.VALIDADA)
 
-    def test_item_manual_so_pode_ser_decidido_por_admin_master(self):
+    def test_item_manual_pode_ser_decidido_por_admin_da_unidade_solicitante(self):
+        admin_unidade_solicitante = self._usuario(
+            "admin_sol_a", self.unidade_solicitante_a, perfil="admin"
+        )
         self.client.force_login(self.admin_a)
         resposta_admin = self.client.post(
             reverse("api:validacao-decidir"),
@@ -228,13 +231,13 @@ class ValidacaoEscopoTests(APITestCase):
         )
         self.assertEqual(resposta_admin.status_code, status.HTTP_403_FORBIDDEN)
 
-        self.client.force_login(self.admin_master)
-        resposta_master = self.client.post(
+        self.client.force_login(admin_unidade_solicitante)
+        resposta_unidade = self.client.post(
             reverse("api:validacao-decidir"),
             {"item_demanda": self.item_manual.id, "acao": "validado"},
             format="json",
         )
-        self.assertEqual(resposta_master.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resposta_unidade.status_code, status.HTTP_201_CREATED)
 
     def test_devolucao_rejeita_comentario_composto_so_por_espacos(self):
         self.client.force_login(self.admin_a)

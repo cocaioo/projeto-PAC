@@ -156,6 +156,16 @@ class RecursosReferenciaAutorizacaoTests(AutorizacaoEscopoBase):
         )
         self.assertEqual(self.client.delete(detalhe).status_code, status.HTTP_204_NO_CONTENT)
 
+    def test_exclusao_de_unidade_referenciada_retorna_conflito_orientado(self):
+        self._login(self.admin_master)
+        resposta = self.client.delete(
+            reverse("api:unidade-detail", kwargs={"pk": self.unidade_usuario_a.pk})
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("Desative", resposta.data["detail"])
+        self.assertTrue(Unidade.objects.filter(pk=self.unidade_usuario_a.pk).exists())
+
     def test_grupo_tem_leitura_autenticada_e_escrita_exclusiva_do_master(self):
         url_lista = reverse("api:grupo-list")
         payload = {
@@ -190,6 +200,16 @@ class RecursosReferenciaAutorizacaoTests(AutorizacaoEscopoBase):
             status.HTTP_200_OK,
         )
         self.assertEqual(self.client.delete(detalhe).status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_exclusao_de_grupo_referenciado_retorna_conflito_orientado(self):
+        self._login(self.admin_master)
+        resposta = self.client.delete(
+            reverse("api:grupo-detail", kwargs={"pk": self.grupo_a.pk})
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("Desative", resposta.data["detail"])
+        self.assertTrue(GrupoContratacao.objects.filter(pk=self.grupo_a.pk).exists())
 
 
 class CatalogoEscopoEscritaTests(AutorizacaoEscopoBase):
@@ -391,6 +411,19 @@ class DemandaEscopoAdministrativoTests(AutorizacaoEscopoBase):
         self.assertNotEqual(self.demanda_mista.status, StatusDemanda.CANCELADA)
         self.assertNotEqual(self.item_misto_a.status, StatusItemDemanda.CANCELADA)
         self.assertNotEqual(self.item_misto_b.status, StatusItemDemanda.CANCELADA)
+
+    def test_admin_da_unidade_solicitante_pode_cancelar_demanda_so_manual(self):
+        admin_solicitante = self._usuario(
+            "admin_manual", self.usuario_b.unidade, perfil="admin"
+        )
+        self._login(admin_solicitante)
+        resposta = self.client.post(
+            reverse("api:demanda-cancelar", kwargs={"pk": self.demanda_manual.pk})
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.demanda_manual.refresh_from_db()
+        self.assertEqual(self.demanda_manual.status, StatusDemanda.CANCELADA)
 
     def test_admin_pode_cancelar_demanda_composta_so_por_seu_grupo(self):
         self._login(self.admin_a)

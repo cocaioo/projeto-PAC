@@ -128,6 +128,8 @@ export default function ValidacaoDecisao() {
     decidir(itemParaDevolver, "devolvido", justificativa);
   }
 
+  if (authLoading) return <LoadingState label="Verificando permissoes..." />;
+
   if (!isAdmin) {
     return (
       <div>

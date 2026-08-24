@@ -38,6 +38,12 @@ def consolidar_itens_em_dfd(*, usuario, numero_dfd, item_ids, ciclo_pac_id):
     if not ciclo.ativo:
         raise ValidationError({"ciclo_pac_id": "O ciclo PAC informado está inativo."})
     ids = set(item_ids)
+    item_refs = list(ItemDemanda.objects.filter(id__in=ids).values("id", "demanda_id"))
+    if len(item_refs) != len(ids):
+        encontrados = {item["id"] for item in item_refs}
+        raise ValidationError({"item_ids": f"Itens inexistentes: {sorted(ids - encontrados)}"})
+    demanda_ids = sorted({item["demanda_id"] for item in item_refs})
+    list(Demanda.objects.select_for_update().filter(id__in=demanda_ids).order_by("id"))
     itens = list(ItemDemanda.objects.select_for_update(of=("self",)).select_related(
         "demanda", "demanda__ciclo_pac", "item_catalogo__grupo"
     ).filter(id__in=ids).order_by("id"))
@@ -86,7 +92,6 @@ def consolidar_itens_em_dfd(*, usuario, numero_dfd, item_ids, ciclo_pac_id):
         usuario=usuario, acao="consolidacao_dfd", modelo="DFD", objeto_id=dfd.id,
         dados_novos={"numero": dfd.numero, "item_ids": [item.id for item in itens], "criado": criado},
     )
-    demanda_ids = sorted({item.demanda_id for item in itens})
-    for demanda in Demanda.objects.select_for_update().filter(id__in=demanda_ids).order_by("id"):
+    for demanda in Demanda.objects.filter(id__in=demanda_ids).order_by("id"):
         sincronizar_status_macro_demanda(demanda)
     return {"dfd": dfd, "itens": itens, "criado": criado, "demandas_afetadas": demanda_ids}

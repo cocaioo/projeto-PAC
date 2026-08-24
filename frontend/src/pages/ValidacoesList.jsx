@@ -148,6 +148,8 @@ export default function ValidacoesList() {
     );
   }
 
+  if (authLoading) return <LoadingState label="Verificando permissoes..." />;
+
   return (
     <div>
       <PageHeader
