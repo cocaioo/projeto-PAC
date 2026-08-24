@@ -674,7 +674,7 @@ class GestaoContasTestCase(APITestCase):
 
     def test_excluir_usuario_com_demandas_vinculadas_retorna_400_com_orientacao(self):
         from apps.demandas.models import Demanda
-        demanda = Demanda.objects.create(
+        Demanda.objects.create(
             usuario=self.comum_user,
             unidade=self.unidade,
             ano_referencia=2026,
@@ -691,5 +691,3 @@ class GestaoContasTestCase(APITestCase):
         url = reverse("api:admin-usuario-detail", kwargs={"pk": 999999})
         res = self.client.delete(url)
         self.assertEqual(res.status_code, 404)
-
-

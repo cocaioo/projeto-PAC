@@ -17,6 +17,7 @@ from apps.demandas.models import (
 from apps.dfd.models import DFD
 from apps.grupos_contratacao.models import GrupoContratacao
 from apps.unidades.models import Unidade
+from apps.usuarios.models import Perfil, SolicitacaoAcesso
 from apps.validacoes.models import Validacao
 
 Usuario = get_user_model()
@@ -102,13 +103,16 @@ class UsuarioMeSerializer(serializers.ModelSerializer):
         return bool(obj.is_admin_master_user)
 
     def _serializar_grupos_administrados(self, obj):
-        if obj.is_admin_master_user or not obj.is_admin_user or not obj.unidade_id:
+        if obj.is_admin_master_user or not obj.is_admin_user:
             return []
-        grupos = (
-            GrupoContratacao.objects.select_related("unidade_admin")
-            .filter(unidade_admin_id=obj.unidade_id)
-            .order_by("nome")
-        )
+        grupos = GrupoContratacao.objects.select_related("unidade_admin")
+        if obj.grupos_administrados.exists():
+            grupos = grupos.filter(administradores=obj)
+        elif obj.unidade_id:
+            grupos = grupos.filter(unidade_admin_id=obj.unidade_id)
+        else:
+            return []
+        grupos = grupos.order_by("nome")
         return GrupoContratacaoResumoSerializer(grupos, many=True).data
 
     def get_grupos_associados(self, obj):
@@ -520,8 +524,6 @@ class ItensElegiveisQuerySerializer(serializers.Serializer):
 # GESTÃO DE ACESSOS E USUÁRIOS
 # =============================================================================
 
-from apps.usuarios.models import SolicitacaoAcesso, Usuario, Perfil
-
 class SolicitarAcessoSerializer(serializers.Serializer):
     nome_completo = serializers.CharField(max_length=150)
     email = serializers.EmailField()
@@ -544,15 +546,53 @@ class SolicitacaoAcessoListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SolicitacaoAcesso
-        fields = '__all__'
+        exclude = ['senha_hash']
 
 class DecisaoSolicitacaoSerializer(serializers.Serializer):
     justificativa = serializers.CharField(required=False, allow_blank=True)
     motivo_rejeicao = serializers.CharField(required=False, allow_blank=True)
+    perfil = serializers.ChoiceField(choices=Perfil.choices, required=False)
+    role = serializers.ChoiceField(choices=Perfil.choices, required=False, write_only=True)
+    grupos_administrados = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False
+    )
+    grupos_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, write_only=True
+    )
+    grupo_contratacao_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, write_only=True
+    )
 
     def validate(self, attrs):
         just = attrs.get('justificativa') or attrs.get('motivo_rejeicao') or ''
         attrs['justificativa'] = just
+
+        perfil = attrs.get('perfil')
+        role = attrs.get('role')
+        if perfil and role and perfil != role:
+            raise serializers.ValidationError({"perfil": "Informe um único perfil."})
+        attrs['perfil'] = perfil or role or Perfil.USUARIO
+
+        grupos_por_campo = [
+            attrs[campo]
+            for campo in ('grupos_administrados', 'grupos_ids', 'grupo_contratacao_ids')
+            if attrs.get(campo) is not None
+        ]
+        if grupos_por_campo and any(set(grupos) != set(grupos_por_campo[0]) for grupos in grupos_por_campo[1:]):
+            raise serializers.ValidationError({"grupos_administrados": "Informe um único conjunto de grupos."})
+        grupos = grupos_por_campo[0] if grupos_por_campo else []
+        if len(grupos) != len(set(grupos)):
+            raise serializers.ValidationError({"grupos_administrados": "Não repita grupos de contratação."})
+        attrs['grupos_administrados'] = grupos
+
+        if attrs['perfil'] == Perfil.ADMIN and not grupos:
+            raise serializers.ValidationError({
+                "grupos_administrados": "Admin deve possuir ao menos um grupo de contratação."
+            })
+        if attrs['perfil'] != Perfil.ADMIN and grupos:
+            raise serializers.ValidationError({
+                "grupos_administrados": "Apenas usuários com perfil admin podem receber grupos."
+            })
         return attrs
 
 class CriarUsuarioAdminSerializer(serializers.Serializer):
@@ -563,7 +603,12 @@ class CriarUsuarioAdminSerializer(serializers.Serializer):
     perfil = serializers.ChoiceField(choices=Perfil.choices)
     senha_temporaria = serializers.CharField(write_only=True, min_length=6, required=False)
     senha = serializers.CharField(write_only=True, min_length=6, required=False)
-    grupos_administrados = serializers.ListField(child=serializers.IntegerField(), required=False)
+    grupos_administrados = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False
+    )
+    grupos_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, write_only=True
+    )
 
     def validate(self, attrs):
         unidade_val = attrs.get('unidade_id') or attrs.get('unidade')
@@ -574,6 +619,18 @@ class CriarUsuarioAdminSerializer(serializers.Serializer):
         if not senha_val:
             raise serializers.ValidationError({"senha_temporaria": "Senha temporária é obrigatória."})
         attrs['senha_temporaria'] = senha_val
+        grupos = attrs.get('grupos_administrados')
+        grupos_alias = attrs.get('grupos_ids')
+        if grupos is not None and grupos_alias is not None and set(grupos) != set(grupos_alias):
+            raise serializers.ValidationError({"grupos_administrados": "Informe um único conjunto de grupos."})
+        grupos = grupos if grupos is not None else (grupos_alias or [])
+        attrs['grupos_administrados'] = grupos
+        if len(grupos) != len(set(grupos)):
+            raise serializers.ValidationError({"grupos_administrados": "Não repita grupos de contratação."})
+        if attrs['perfil'] != Perfil.ADMIN and grupos:
+            raise serializers.ValidationError({
+                "grupos_administrados": "Apenas usuários com perfil admin podem receber grupos."
+            })
         return attrs
 
 class UsuarioAdminListSerializer(serializers.ModelSerializer):
@@ -591,9 +648,7 @@ class UsuarioAdminListSerializer(serializers.ModelSerializer):
         ]
 
     def get_grupos_nomes(self, obj):
-        if obj.unidade:
-            return list(obj.unidade.grupos_administrados.values_list('nome', flat=True))
-        return []
+        return list(obj.grupos_administrados.values_list('nome', flat=True))
 
 class UsuarioStatusUpdateSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(required=False)

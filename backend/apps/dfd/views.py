@@ -14,9 +14,9 @@ from .models import DFD
 def _dfds_no_escopo_do_admin(queryset, user):
     if user.is_admin_master_user:
         return queryset
-    if not user.unidade_id:
+    if not user.is_admin_user:
         return queryset.none()
-    return queryset.filter(grupo__unidade_admin_id=user.unidade_id)
+    return queryset.filter(user.filtro_grupos_administrados("grupo"))
 
 
 def _itens_e_grupos_no_escopo_do_admin(user):
@@ -32,11 +32,11 @@ def _itens_e_grupos_no_escopo_do_admin(user):
     grupos = GrupoContratacao.objects.filter(ativo=True)
     if user.is_admin_master_user:
         return itens, grupos
-    if not user.unidade_id:
+    if not user.is_admin_user:
         return itens.none(), grupos.none()
     return (
-        itens.filter(item_catalogo__grupo__unidade_admin_id=user.unidade_id),
-        grupos.filter(unidade_admin_id=user.unidade_id),
+        itens.filter(user.filtro_grupos_administrados("item_catalogo__grupo")),
+        grupos.filter(user.filtro_grupos_administrados("")),
     )
 
 
@@ -91,7 +91,7 @@ def dfd_consolidar(request):
         if grupo is None:
             messages.error(request, "Grupo de contratacao nao encontrado.")
             return redirect("dfds:consolidar")
-        if not request.user.is_admin_master_user and grupo.unidade_admin_id != request.user.unidade_id:
+        if not request.user.is_admin_master_user and not request.user.pode_administrar_grupo(grupo):
             messages.error(request, "Voce nao tem permissao para consolidar itens deste grupo.")
             return redirect("dfds:consolidar")
 

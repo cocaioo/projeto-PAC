@@ -1,4 +1,3 @@
-import re
 from django.db import models, transaction
 from django.utils import timezone
 from django.conf import settings
@@ -7,6 +6,7 @@ from django.contrib.auth.hashers import make_password
 from django.utils.text import slugify
 
 from apps.usuarios.models import Usuario, SolicitacaoAcesso, StatusSolicitacao, Perfil
+from apps.grupos_contratacao.models import GrupoContratacao
 from apps.auditoria.models import LogAuditoria
 from apps.usuarios.services_email import enviar_email_aprovacao, enviar_email_rejeicao
 
@@ -56,8 +56,31 @@ def solicitar_acesso(nome_completo, email, unidade, senha):
     return solicitacao
 
 
+def _validar_escopo_administrativo(perfil, grupos_ids, exigir_grupo_admin=True):
+    grupos_ids = list(grupos_ids or [])
+    if len(grupos_ids) != len(set(grupos_ids)):
+        raise ValidationError("Não repita grupos de contratação.")
+    if perfil == Perfil.ADMIN and exigir_grupo_admin and not grupos_ids:
+        raise ValidationError("Admin deve possuir ao menos um grupo de contratação.")
+    if perfil != Perfil.ADMIN and grupos_ids:
+        raise ValidationError("Apenas usuários com perfil admin podem receber grupos.")
+    if perfil not in Perfil.values:
+        raise ValidationError("Perfil inválido.")
+
+    grupos = list(GrupoContratacao.objects.filter(pk__in=grupos_ids, ativo=True))
+    encontrados = {grupo.pk for grupo in grupos}
+    faltantes = sorted(set(grupos_ids) - encontrados)
+    if faltantes:
+        raise ValidationError(f"Grupo(s) de contratação inexistente(s) ou inativo(s): {faltantes}.")
+    return grupos
+
+
 @transaction.atomic
-def aprovar_solicitacao(solicitacao_id, admin_master_user):
+def aprovar_solicitacao(solicitacao_id, admin_master_user, perfil=Perfil.USUARIO, grupos_ids=None):
+    if not getattr(admin_master_user, "is_admin_master_user", False):
+        raise ValidationError("Apenas o Admin Master pode aprovar solicitações.")
+
+    grupos = _validar_escopo_administrativo(perfil, grupos_ids)
     solicitacao = SolicitacaoAcesso.objects.select_for_update().get(id=solicitacao_id)
     
     if solicitacao.status != StatusSolicitacao.PENDENTE:
@@ -80,9 +103,11 @@ def aprovar_solicitacao(solicitacao_id, admin_master_user):
         email=solicitacao.email,
         password=solicitacao.senha_hash,
         unidade=solicitacao.unidade,
-        perfil=Perfil.USUARIO,
+        perfil=perfil,
         is_active=True
     )
+    if grupos:
+        usuario.grupos_administrados.set(grupos)
     
     solicitacao.status = StatusSolicitacao.APROVADO
     solicitacao.analisado_por = admin_master_user
@@ -95,7 +120,11 @@ def aprovar_solicitacao(solicitacao_id, admin_master_user):
         acao="APROVACAO_SOLICITACAO",
         modelo="SolicitacaoAcesso",
         objeto_id=solicitacao.id,
-        dados_novos={'status': StatusSolicitacao.APROVADO}
+        dados_novos={
+            'status': StatusSolicitacao.APROVADO,
+            'perfil': usuario.perfil,
+            'grupos_administrados': [grupo.pk for grupo in grupos],
+        }
     )
     
     registrar_log(
@@ -103,7 +132,11 @@ def aprovar_solicitacao(solicitacao_id, admin_master_user):
         acao="CRIACAO_USUARIO",
         modelo="Usuario",
         objeto_id=usuario.id,
-        dados_novos={'email': usuario.email, 'perfil': usuario.perfil}
+        dados_novos={
+            'email': usuario.email,
+            'perfil': usuario.perfil,
+            'grupos_administrados': [grupo.pk for grupo in grupos],
+        }
     )
     
     enviar_email_aprovacao(solicitacao, usuario)
@@ -137,8 +170,9 @@ def rejeitar_solicitacao(solicitacao_id, admin_master_user, justificativa=""):
 
 @transaction.atomic
 def criar_usuario_admin(admin_master_user, nome_completo, email, unidade, perfil, senha_temporaria, grupos_ids=None):
-    if perfil not in [Perfil.USUARIO, Perfil.ADMIN, Perfil.ADMIN_MASTER]:
-        raise ValidationError("Perfil inválido.")
+    grupos = _validar_escopo_administrativo(
+        perfil, grupos_ids, exigir_grupo_admin=False
+    )
         
     if Usuario.objects.filter(email=email).exists():
         raise ValidationError("Já existe um usuário com este e-mail.")
@@ -162,13 +196,19 @@ def criar_usuario_admin(admin_master_user, nome_completo, email, unidade, perfil
     )
     usuario.set_password(senha_temporaria)
     usuario.save()
+    if grupos:
+        usuario.grupos_administrados.set(grupos)
     
     registrar_log(
         usuario=admin_master_user,
         acao="CRIACAO_USUARIO_ADMIN",
         modelo="Usuario",
         objeto_id=usuario.id,
-        dados_novos={'email': email, 'perfil': perfil}
+        dados_novos={
+            'email': email,
+            'perfil': perfil,
+            'grupos_administrados': [grupo.pk for grupo in grupos],
+        }
     )
     
     return usuario
@@ -226,4 +266,3 @@ def excluir_usuario(admin_master_user, usuario_id):
             "Não é possível excluir este usuário permanentemente pois existem registros vinculados "
             "(como demandas, DFDs ou validações). Para revogar o acesso, utilize a opção de desativar."
         )
-

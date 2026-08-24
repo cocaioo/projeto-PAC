@@ -14,10 +14,10 @@ from .models import TipoAcao, Validacao
 def _itens_no_escopo_do_admin(queryset, user):
     if user.is_admin_master_user:
         return queryset
-    if not user.unidade_id:
+    if not user.is_admin_user:
         return queryset.none()
     return queryset.filter(
-        Q(item_catalogo__grupo__unidade_admin_id=user.unidade_id)
+        user.filtro_grupos_administrados("item_catalogo__grupo")
         | Q(item_catalogo__isnull=True, demanda__unidade_id=user.unidade_id)
     )
 
@@ -25,19 +25,9 @@ def _itens_no_escopo_do_admin(queryset, user):
 def _usuario_pode_decidir_item(user, item):
     if user.is_admin_master_user:
         return True
-    return bool(
-        user.unidade_id
-        and (
-            (
-                item.item_catalogo_id
-                and item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
-            )
-            or (
-                not item.item_catalogo_id
-                and item.demanda.unidade_id == user.unidade_id
-            )
-        )
-    )
+    if item.item_catalogo_id:
+        return user.pode_administrar_grupo(item.item_catalogo.grupo)
+    return bool(user.unidade_id and item.demanda.unidade_id == user.unidade_id)
 
 
 @login_required

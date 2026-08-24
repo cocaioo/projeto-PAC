@@ -23,9 +23,7 @@ class ConflitoConsolidacao(Exception):
 
 
 def _pode_administrar_grupo(usuario, grupo):
-    return usuario.is_admin_master_user or (
-        usuario.is_admin_user and usuario.unidade_id == grupo.unidade_admin_id
-    )
+    return usuario.pode_administrar_grupo(grupo)
 
 
 @transaction.atomic

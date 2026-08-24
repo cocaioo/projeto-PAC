@@ -85,7 +85,7 @@ def _usuario_admin_do_grupo(usuario, item) -> bool:
     if item.item_catalogo_id is None:
         return item.demanda.unidade_id == usuario.unidade_id
     grupo = getattr(getattr(item, "item_catalogo", None), "grupo", None)
-    return bool(grupo and grupo.unidade_admin_id == usuario.unidade_id)
+    return bool(grupo and usuario.pode_administrar_grupo(grupo))
 
 
 def verificar_acesso_item_demanda(*, usuario, item, operacao: OperacaoItemDemanda) -> None:

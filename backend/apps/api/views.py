@@ -40,6 +40,15 @@ from apps.dfd.selectors import (
 from apps.dfd.services import ConflitoConsolidacao, consolidar_itens_em_dfd
 from apps.grupos_contratacao.models import GrupoContratacao
 from apps.unidades.models import Unidade
+from apps.usuarios.models import SolicitacaoAcesso, Usuario
+from apps.usuarios.services import (
+    solicitar_acesso,
+    aprovar_solicitacao,
+    rejeitar_solicitacao,
+    criar_usuario_admin,
+    alterar_status_usuario,
+    excluir_usuario,
+)
 from apps.validacoes.models import TipoAcao, Validacao
 
 from .permissions import IsAdminMasterUserPermission, IsAdminUserPermission
@@ -54,8 +63,13 @@ from .serializers import (
     ItensElegiveisQuerySerializer,
     UnidadeSerializer,
     UsuarioMeSerializer,
-    UsuarioSerializer,
     ValidacaoSerializer,
+    SolicitarAcessoSerializer,
+    SolicitacaoAcessoListSerializer,
+    DecisaoSolicitacaoSerializer,
+    CriarUsuarioAdminSerializer,
+    UsuarioAdminListSerializer,
+    UsuarioStatusUpdateSerializer,
 )
 from .validation_serializers import ItemPendenteValidacaoSerializer
 
@@ -70,12 +84,12 @@ def demandas_no_escopo_do_usuario(queryset, usuario):
         return queryset
     if getattr(usuario, "is_admin_user", False):
         filtro = Q(usuario=usuario)
-        if usuario.unidade_id:
-            filtro |= Q(
-                itens__item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
-            ) | Q(
-                itens__item_catalogo__isnull=True, unidade_id=usuario.unidade_id
-            )
+        if not usuario.is_admin_master_user:
+            filtro |= usuario.filtro_grupos_administrados("itens__item_catalogo__grupo")
+            if usuario.unidade_id:
+                filtro |= Q(
+                    itens__item_catalogo__isnull=True, unidade_id=usuario.unidade_id
+                )
         return queryset.filter(filtro).distinct()
     return queryset.filter(usuario=usuario)
 
@@ -86,12 +100,12 @@ def itens_no_escopo_do_usuario(queryset, usuario):
         return queryset
     if getattr(usuario, "is_admin_user", False):
         filtro = Q(demanda__usuario=usuario)
-        if usuario.unidade_id:
-            filtro |= Q(
-                item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
-            ) | Q(
-                item_catalogo__isnull=True, demanda__unidade_id=usuario.unidade_id
-            )
+        if not usuario.is_admin_master_user:
+            filtro |= usuario.filtro_grupos_administrados("item_catalogo__grupo")
+            if usuario.unidade_id:
+                filtro |= Q(
+                    item_catalogo__isnull=True, demanda__unidade_id=usuario.unidade_id
+                )
         return queryset.filter(filtro).distinct()
     return queryset.filter(demanda__usuario=usuario)
 
@@ -104,8 +118,8 @@ def dfds_no_escopo_do_usuario(queryset, usuario):
     filtro = Q(itens_demanda__demanda__usuario=usuario) | Q(
         itens_vinculados__demanda__usuario=usuario
     )
-    if getattr(usuario, "is_admin_user", False) and usuario.unidade_id:
-        filtro |= Q(grupo__unidade_admin_id=usuario.unidade_id)
+    if getattr(usuario, "is_admin_user", False) and not usuario.is_admin_master_user:
+        filtro |= usuario.filtro_grupos_administrados("grupo")
     return queryset.filter(filtro).distinct()
 
 
@@ -217,8 +231,7 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
             return
         if (
             getattr(usuario, "is_admin_user", False)
-            and usuario.unidade_id
-            and grupo.unidade_admin_id == usuario.unidade_id
+            and usuario.pode_administrar_grupo(grupo)
         ):
             return
         raise PermissionDenied(
@@ -350,7 +363,7 @@ class DemandaViewSet(viewsets.ModelViewSet):
         if not user.is_admin_user or not user.unidade_id:
             return False
         itens_no_escopo = Q(
-            item_catalogo__grupo__unidade_admin_id=user.unidade_id
+            user.filtro_grupos_administrados("item_catalogo__grupo")
         ) | Q(
             item_catalogo__isnull=True,
             demanda__unidade_id=user.unidade_id,
@@ -673,7 +686,7 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
         if getattr(user, "is_admin_user", False):
             return qs.filter(
                 Q(demanda__usuario=user)
-                | Q(item_catalogo__grupo__unidade_admin_id=user.unidade_id)
+                | user.filtro_grupos_administrados("item_catalogo__grupo")
                 | Q(item_catalogo__isnull=True, demanda__unidade_id=user.unidade_id)
             )
         return qs.filter(demanda__usuario=user)
@@ -795,13 +808,14 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         if user.is_admin_master_user:
             return queryset
-        if not user.unidade_id:
+        if not user.grupos_administrados.exists() and not user.unidade_id:
             return queryset.none()
-        filtro = Q(item_demanda__item_catalogo__grupo__unidade_admin_id=user.unidade_id)
-        filtro |= Q(
-            item_demanda__item_catalogo__isnull=True,
-            item_demanda__demanda__unidade_id=user.unidade_id
-        )
+        filtro = user.filtro_grupos_administrados("item_demanda__item_catalogo__grupo")
+        if user.unidade_id:
+            filtro |= Q(
+                item_demanda__item_catalogo__isnull=True,
+                item_demanda__demanda__unidade_id=user.unidade_id
+            )
         return queryset.filter(filtro)
 
     @staticmethod
@@ -812,26 +826,24 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
         """
         if user.is_admin_master_user:
             return queryset
-        if not user.unidade_id:
+        if not user.grupos_administrados.exists() and not user.unidade_id:
             return queryset.none()
-        filtro = Q(item_catalogo__grupo__unidade_admin_id=user.unidade_id)
-        filtro |= Q(
-            item_catalogo__isnull=True,
-            demanda__unidade_id=user.unidade_id
-        )
+        filtro = user.filtro_grupos_administrados("item_catalogo__grupo")
+        if user.unidade_id:
+            filtro |= Q(
+                item_catalogo__isnull=True,
+                demanda__unidade_id=user.unidade_id
+            )
         return queryset.filter(filtro)
 
     @staticmethod
     def _usuario_pode_decidir_item(user, item):
         if user.is_admin_master_user:
             return True
-        if not user.unidade_id:
-            return False
-        
         if item.item_catalogo_id:
-            return item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
+            return user.pode_administrar_grupo(item.item_catalogo.grupo)
         
-        return item.demanda.unidade_id == user.unidade_id
+        return bool(user.unidade_id and item.demanda.unidade_id == user.unidade_id)
 
     @staticmethod
     def _filtro_id(request, nome, *aliases):
@@ -1090,7 +1102,7 @@ class ConsolidarDFDView(APIView):
             )
         if (
             not request.user.is_admin_master_user
-            and request.user.unidade_id != grupo.unidade_admin_id
+            and not request.user.pode_administrar_grupo(grupo)
         ):
             return Response(
                 {"detail": "Voce nao tem permissao para consolidar itens deste grupo."},
@@ -1160,10 +1172,8 @@ class DFDViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         if self.request.user.is_admin_master_user:
             return queryset
-        if not self.request.user.unidade_id:
-            return queryset.none()
         return queryset.filter(
-            grupo__unidade_admin_id=self.request.user.unidade_id
+            self.request.user.filtro_grupos_administrados("grupo")
         )
 
     @action(detail=False, methods=["get"])
@@ -1182,8 +1192,8 @@ class DFDViewSet(viewsets.ModelViewSet):
         )
         if not request.user.is_admin_master_user:
             itens = itens.filter(
+                request.user.filtro_grupos_administrados("item_catalogo__grupo"),
                 item_catalogo__isnull=False,
-                item_catalogo__grupo__unidade_admin_id=request.user.unidade_id,
             )
         return Response(ItemDemandaSerializer(itens, many=True).data)
 
@@ -1229,7 +1239,35 @@ class DFDViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_409_CONFLICT,
                     )
 
+            grupo = GrupoContratacao.objects.filter(pk=grupo_id).first()
+            if grupo is None:
+                return Response(
+                    {"detail": "Grupo de contratacao nao encontrado."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if (
+                not request.user.is_admin_master_user
+                and not request.user.pode_administrar_grupo(grupo)
+            ):
+                return Response(
+                    {"detail": "Voce nao tem permissao para consolidar itens deste grupo."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             for item in itens:
+                if (
+                    not request.user.is_admin_master_user
+                    and not request.user.pode_administrar_grupo(item.item_catalogo.grupo)
+                ):
+                    return Response(
+                        {"detail": "Voce nao tem permissao para consolidar itens deste grupo."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                if item.item_catalogo.grupo_id != grupo.pk:
+                    return Response(
+                        {"detail": "Todos os itens precisam pertencer ao grupo informado."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 if not pode_transicionar_item(item.status, StatusItemDemanda.VINCULADA_DFD):
                     return Response(
                         {"detail": f"Item #{item.id} em status '{item.status}' não pode ser consolidado/vinculado."},
@@ -1296,24 +1334,6 @@ class DashboardStatsView(APIView):
 # GESTÃO DE ACESSOS E USUÁRIOS
 # =============================================================================
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
-
-from apps.api.permissions import IsAdminMasterUserPermission
-from apps.unidades.models import Unidade
-from apps.usuarios.services import (
-    solicitar_acesso, aprovar_solicitacao, rejeitar_solicitacao, 
-    criar_usuario_admin, alterar_status_usuario, excluir_usuario
-)
-from apps.usuarios.models import SolicitacaoAcesso, Usuario
-from apps.api.serializers import (
-    SolicitarAcessoSerializer, SolicitacaoAcessoListSerializer,
-    DecisaoSolicitacaoSerializer, CriarUsuarioAdminSerializer,
-    UsuarioAdminListSerializer, UsuarioStatusUpdateSerializer
-)
-
 class SolicitarAcessoView(APIView):
     permission_classes = [AllowAny]
 
@@ -1349,8 +1369,15 @@ class AdminAprovarSolicitacaoView(APIView):
     permission_classes = [IsAdminMasterUserPermission]
 
     def post(self, request, pk):
+        serializer = DecisaoSolicitacaoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         try:
-            aprovar_solicitacao(pk, request.user)
+            aprovar_solicitacao(
+                solicitacao_id=pk,
+                admin_master_user=request.user,
+                perfil=serializer.validated_data["perfil"],
+                grupos_ids=serializer.validated_data.get("grupos_administrados", []),
+            )
             return Response({"message": "Solicitação aprovada."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1375,7 +1402,7 @@ class AdminUsuariosView(APIView):
     permission_classes = [IsAdminMasterUserPermission]
 
     def get(self, request):
-        users = Usuario.objects.all().select_related('unidade').prefetch_related('unidade__grupos_administrados').order_by('first_name')
+        users = Usuario.objects.all().select_related('unidade').prefetch_related('grupos_administrados').order_by('first_name')
         perfil = request.query_params.get('perfil')
         unidade = request.query_params.get('unidade')
         if perfil:
@@ -1396,7 +1423,8 @@ class AdminUsuariosView(APIView):
                 email=serializer.validated_data['email'],
                 unidade=unidade,
                 perfil=serializer.validated_data['perfil'],
-                senha_temporaria=serializer.validated_data['senha_temporaria']
+                senha_temporaria=serializer.validated_data['senha_temporaria'],
+                grupos_ids=serializer.validated_data.get('grupos_administrados', []),
             )
             return Response({"message": "Usuário criado com sucesso."}, status=status.HTTP_201_CREATED)
         except Exception as e:
