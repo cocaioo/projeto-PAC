@@ -34,7 +34,7 @@ export default function DemandaList() {
     setCarregando(true);
     setErro(null);
     api
-      .listDemandas()
+      .listDemandas({ proprias: true })
       .then((data) => {
         if (montado) setDemandas(resultsFrom(data));
       })

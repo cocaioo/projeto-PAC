@@ -105,8 +105,8 @@ describe("AppRoutes", () => {
     });
   });
 
-  it("bloqueia /admin/usuarios para admin comum", () => {
-    renderAt("/admin/usuarios", {
+  it("bloqueia /gestao/usuarios para admin comum", () => {
+    renderAt("/gestao/usuarios", {
       user: { username: "admin", perfil: "admin" },
       loading: false,
       isAdmin: true,
@@ -115,8 +115,8 @@ describe("AppRoutes", () => {
     expect(screen.getByText(/plano anual de contratações da ufpi/i)).toBeInTheDocument();
   });
 
-  it("autoriza /admin/usuarios para admin master", async () => {
-    renderAt("/admin/usuarios", {
+  it("autoriza /gestao/usuarios para admin master", async () => {
+    renderAt("/gestao/usuarios", {
       user: { username: "master", perfil: "admin_master" },
       loading: false,
       isAdmin: true,

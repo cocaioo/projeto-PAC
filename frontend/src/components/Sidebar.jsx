@@ -3,19 +3,19 @@ import { useAuth } from "../auth/AuthContext";
 
 const userLinks = [
   { to: "/", label: "Início", icon: "bi-house" },
-  { to: "/demandas", label: "Demandas", icon: "bi-file-earmark-text" },
+  { to: "/demandas", label: "Minhas demandas", icon: "bi-file-earmark-text" },
   { to: "/catalogo", label: "Catálogo", icon: "bi-box-seam" },
   { to: "/dashboard", label: "Indicadores", icon: "bi-bar-chart" },
   { to: "/conta", label: "Minha conta", icon: "bi-person" },
 ];
 
 const adminLinks = [
-  { to: "/validacoes", label: "Demandas para validar", icon: "bi-check2-square" },
+  { to: "/validacoes", label: "Pendências de validação", icon: "bi-check2-square" },
   { to: "/dfds", label: "Documentos DFD", icon: "bi-collection" },
 ];
 
 const adminMasterLinks = [
-  { to: "/admin/usuarios", label: "Gestão de Usuários", icon: "bi-people" },
+  { to: "/gestao/usuarios", label: "Gestão de Usuários", icon: "bi-people" },
 ];
 
 function MenuLink({ item }) {
@@ -38,7 +38,12 @@ export default function Sidebar({ user, isAdmin }) {
       <nav className="app-sidebar__nav">
         <div className="app-sidebar__section">Principal</div>
         <MenuLink item={userLinks[0]} />
-        {user && userLinks.slice(1).map((item) => <MenuLink item={item} key={item.to} />)}
+        {user && (
+          <>
+            <div className="app-sidebar__section">Área do requisitante</div>
+            {userLinks.slice(1).map((item) => <MenuLink item={item} key={item.to} />)}
+          </>
+        )}
         {isAdmin && (
           <>
             <div className="app-sidebar__section">Administração</div>

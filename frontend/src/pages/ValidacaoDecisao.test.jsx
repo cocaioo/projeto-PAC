@@ -129,7 +129,7 @@ describe("ValidacaoDecisao", () => {
       comentario: "",
     }));
     expect(await screen.findByText("O item Notebook foi validado com sucesso.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Status: Validada")).toBeInTheDocument();
+    expect(screen.queryByText("Notebook")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Validar item Notebook" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Validar item Monitor" })).toBeInTheDocument();
   });
@@ -168,8 +168,8 @@ describe("ValidacaoDecisao", () => {
       comentario: "Ajustar a especificação técnica",
     }));
     expect(await screen.findByText("O item Notebook foi devolvido ao solicitante.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Status: Devolvida")).toBeInTheDocument();
-    expect(screen.getByText("Ajustar a especificação técnica")).toBeInTheDocument();
+    expect(screen.queryByText("Notebook")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ajustar a especificação técnica")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Devolver item Monitor" })).toBeInTheDocument();
   });
 

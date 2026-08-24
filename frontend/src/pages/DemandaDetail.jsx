@@ -225,7 +225,8 @@ export default function DemandaDetail() {
 
   if (!demanda) return null;
 
-  const isDraft = canEditDemand(demanda);
+  const isOwner = demanda.pode_editar === true;
+  const isDraft = isOwner && canEditDemand(demanda);
   const nextAction = getDemandNextAction(demanda);
   const checklistItems = [
     { label: "Adicione ao menos um item", done: itens.length > 0 },
@@ -369,8 +370,8 @@ export default function DemandaDetail() {
                 const returnReason = getReturnReason(item);
                 const returnResponsible = getResponsibleName(item.ultima_devolucao?.responsavel);
                 const dfdNumber = getDfdNumber(item);
-                const editable = canEditItem(demanda, item);
-                const resubmittable = canResubmitItem(demanda, item);
+                const editable = isOwner && canEditItem(demanda, item);
+                const resubmittable = isOwner && canResubmitItem(demanda, item);
                 const itemNextAction = getItemNextAction(item, demanda);
 
                 return (

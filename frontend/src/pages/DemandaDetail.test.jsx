@@ -20,6 +20,7 @@ vi.mock("../api/client", async (importOriginal) => {
 
 const demandaRascunho = {
   id: 7,
+  pode_editar: true,
   unidade_sigla: "STI",
   ano_referencia: 2027,
   usuario_nome: "Ana Silva",
@@ -39,6 +40,7 @@ const demandaRascunho = {
 
 const demandaDevolvida = {
   id: 7,
+  pode_editar: true,
   unidade_sigla: "STI",
   ano_referencia: 2027,
   usuario_nome: "Ana Silva",

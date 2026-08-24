@@ -28,6 +28,7 @@ export default function ValidacaoDecisao() {
   const [erro, setErro] = useState(null);
   const [erroDecisao, setErroDecisao] = useState(null);
   const [mensagem, setMensagem] = useState("");
+  const [avisoSincronizacao, setAvisoSincronizacao] = useState("");
   const [tentativa, setTentativa] = useState(0);
   const [itemParaValidar, setItemParaValidar] = useState(null);
   const [itemParaDevolver, setItemParaDevolver] = useState(null);
@@ -90,6 +91,7 @@ export default function ValidacaoDecisao() {
     setDecidindoId(item.id);
     setErroDecisao(null);
     setMensagem("");
+    setAvisoSincronizacao("");
     try {
       await api.decidirValidacao({
         item_demanda: item.id,
@@ -97,12 +99,21 @@ export default function ValidacaoDecisao() {
         comentario: justificativa,
       });
       const devolvido = acao === "devolvido";
-      setItens((atuais) => atualizarStatus(
-        atuais,
-        item.id,
-        devolvido ? "devolvida" : "validada",
-        justificativa
-      ));
+      const atualizacaoLocal = (atuais) => atualizarStatus(
+          atuais,
+          item.id,
+          devolvido ? "devolvida" : "validada",
+          justificativa
+        );
+      try {
+        const pendentesAtualizados = await api.listPendentes({ demanda: demandaId });
+        setItens(resultadosDaApi(pendentesAtualizados).filter(
+          (itemPendente) => itemPendente.id !== item.id
+        ));
+      } catch {
+        setItens(atualizacaoLocal);
+        setAvisoSincronizacao("A decisão foi registrada, mas não foi possível atualizar a fila. Use o botão de voltar e atualize as pendências.");
+      }
       setMensagem(
         devolvido
           ? `O item ${item.nome} foi devolvido ao solicitante.`
@@ -159,6 +170,16 @@ export default function ValidacaoDecisao() {
     return (
       <div>
         <PageHeader eyebrow="Administração" title="Análise da demanda" />
+        {mensagem && (
+          <InlineMessage variant="success" title="Decisão registrada" onDismiss={() => setMensagem("")}>
+            {mensagem}
+          </InlineMessage>
+        )}
+        {avisoSincronizacao && (
+          <InlineMessage variant="warning" title="Atualização pendente" onDismiss={() => setAvisoSincronizacao("")}>
+            {avisoSincronizacao}
+          </InlineMessage>
+        )}
         <EmptyState
           icon="bi-folder-x"
           title="Demanda sem itens pendentes"
@@ -190,6 +211,11 @@ export default function ValidacaoDecisao() {
       {mensagem && (
         <InlineMessage variant="success" title="Decisão registrada" onDismiss={() => setMensagem("")}>
           {mensagem}
+        </InlineMessage>
+      )}
+      {avisoSincronizacao && (
+        <InlineMessage variant="warning" title="Atualização pendente" onDismiss={() => setAvisoSincronizacao("")}>
+          {avisoSincronizacao}
         </InlineMessage>
       )}
 

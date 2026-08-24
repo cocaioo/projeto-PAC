@@ -432,14 +432,17 @@ function TabCriarUsuario({ onCreated }) {
   const [perfil, setPerfil] = useState("usuario");
   const [unidade, setUnidade] = useState("");
   const [senha, setSenha] = useState("");
+  const [gruposSelecionados, setGruposSelecionados] = useState([]);
 
   const [unidades, setUnidades] = useState([]);
+  const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     api.listUnidades().then(data => setUnidades((data.results || data).sort((a,b) => a.nome.localeCompare(b.nome)))).catch(() => {});
+    api.listGrupos({ ativo: true }).then(data => setGrupos((data.results || data).filter(g => g.ativo !== false))).catch(() => {});
   }, []);
 
   const handleSubmit = async (e) => {
@@ -455,6 +458,7 @@ function TabCriarUsuario({ onCreated }) {
         perfil,
         unidade: unidade || null,
         senha,
+        grupos_administrados: perfil === "admin" ? gruposSelecionados.map(Number) : [],
       });
       alert("Usuário criado com sucesso!");
       onCreated();
@@ -495,9 +499,27 @@ function TabCriarUsuario({ onCreated }) {
         </div>
 
         {perfil === 'admin' && (
-          <p className="text-muted small">
-            O escopo administrativo será herdado dos grupos de contratação administrados pela unidade selecionada.
-          </p>
+          <fieldset className="mb-3">
+            <legend className="form-label">Grupos administrados</legend>
+            <p className="text-muted small">Selecione explicitamente um ou mais grupos de contratação.</p>
+            {grupos.map(grupo => (
+              <div className="form-check" key={grupo.id}>
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id={`grupo-criacao-${grupo.id}`}
+                  checked={gruposSelecionados.includes(String(grupo.id))}
+                  onChange={event => setGruposSelecionados(atuais => event.target.checked
+                    ? [...atuais, String(grupo.id)]
+                    : atuais.filter(id => id !== String(grupo.id)))}
+                />
+                <label className="form-check-label" htmlFor={`grupo-criacao-${grupo.id}`}>{grupo.nome}</label>
+              </div>
+            ))}
+            {fieldErrors.grupos_administrados && (
+              <div className="text-danger small">{fieldErrors.grupos_administrados}</div>
+            )}
+          </fieldset>
         )}
 
         {perfil === 'admin_master' && (
@@ -508,7 +530,7 @@ function TabCriarUsuario({ onCreated }) {
 
         <Input label="Senha Temporária" type="password" placeholder="Senha inicial de acesso" hint="O usuário utilizará esta senha junto com o e-mail no primeiro login." value={senha} onChange={e => setSenha(e.target.value)} required error={fieldErrors.senha} />
 
-        <Button type="submit" loading={loading}>Salvar Usuário</Button>
+        <Button type="submit" loading={loading} disabled={perfil === "admin" && gruposSelecionados.length === 0}>Salvar Usuário</Button>
       </form>
     </Card>
   );

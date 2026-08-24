@@ -55,7 +55,7 @@ export default function AppRoutes() {
         <Route path="dfds/:id" element={admin(<DfdDetail />)} />
 
         {/* ADMIN MASTER */}
-        <Route path="admin/usuarios" element={adminMaster(<AdminUsuarios />)} />
+        <Route path="gestao/usuarios" element={adminMaster(<AdminUsuarios />)} />
 
         {/* Fallback */}
         <Route path="*" element={<Home />} />

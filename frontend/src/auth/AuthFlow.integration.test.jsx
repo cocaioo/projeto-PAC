@@ -38,7 +38,7 @@ function AppTest({ initialRoute = "/login" }) {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/solicitar-acesso" element={<SolicitarAcesso />} />
-          <Route path="/admin/usuarios" element={<AdminUsuarios />} />
+          <Route path="/gestao/usuarios" element={<AdminUsuarios />} />
           <Route path="/" element={<div data-testid="dashboard-home">Página Principal do PAC</div>} />
         </Routes>
       </AuthProvider>
@@ -116,7 +116,7 @@ describe("AuthFlow Integration", () => {
     });
     api.aprovarSolicitacao.mockResolvedValue({ message: "Solicitação aprovada." });
 
-    render(<AppTest initialRoute="/admin/usuarios" />);
+    render(<AppTest initialRoute="/gestao/usuarios" />);
 
     await waitFor(() => {
       expect(screen.getByText("Carlos Eduardo")).toBeInTheDocument();

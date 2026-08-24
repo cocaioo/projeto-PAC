@@ -121,6 +121,7 @@ describe("AdminUsuarios", () => {
   });
 
   it("navega para aba de criar usuário, preenche form e salva", async () => {
+    api.listGrupos.mockResolvedValue([{ id: 42, nome: "TIC", ativo: true }]);
     renderWithRouter(<AdminUsuarios />);
     
     await testUser.click(screen.getByText("Criar Usuário", { selector: 'button' }));
@@ -135,6 +136,7 @@ describe("AdminUsuarios", () => {
     const perfilSelect = screen.getByLabelText(/Perfil/i);
     await testUser.selectOptions(perfilSelect, "admin");
     await testUser.selectOptions(screen.getByLabelText(/Unidade/i), "1");
+    await testUser.click(await screen.findByLabelText("TIC"));
     
     await testUser.type(screen.getByLabelText(/Senha/i), "senha123");
     
@@ -146,7 +148,8 @@ describe("AdminUsuarios", () => {
       email: "admin@ufpi.br",
       perfil: "admin",
       unidade: "1",
-      senha: "senha123"
+      senha: "senha123",
+      grupos_administrados: [42]
     }));
   });
 

@@ -96,7 +96,7 @@ describe("ValidacoesList", () => {
       "href",
       "/validacoes/12"
     );
-    expect(screen.queryByText("Notebook")).not.toBeInTheDocument();
+    expect(screen.getByText("Notebook")).toBeInTheDocument();
   });
 
   it("mantém filtros por unidade e grupo no endpoint de pendências", async () => {

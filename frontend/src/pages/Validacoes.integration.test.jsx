@@ -95,7 +95,7 @@ describe("fluxo administrativo de validações", () => {
       acao: "validado",
       comentario: "",
     }]));
-    expect(await screen.findByLabelText("Status: Validada")).toBeInTheDocument();
+    expect(await screen.findByText("Demanda sem itens pendentes")).toBeInTheDocument();
     expect(screen.getByText(/validado com sucesso/i)).toBeInTheDocument();
   });
 
@@ -154,7 +154,7 @@ describe("fluxo administrativo de validações", () => {
     await user.click(within(modal).getByRole("button", { name: "Confirmar validação" }));
 
     // Confirmação visual da decisão
-    expect(await screen.findByLabelText("Status: Validada")).toBeInTheDocument();
+    expect(await screen.findByText("Demanda sem itens pendentes")).toBeInTheDocument();
     expect(screen.getByText(/validado com sucesso/i)).toBeInTheDocument();
 
     // Confirma que o payload foi enviado corretamente

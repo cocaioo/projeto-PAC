@@ -60,13 +60,15 @@ export default function Home() {
           icon="bi-file-earmark-text"
           actionLabel="Acompanhar"
         />
-        <ActionCard
-          title="Consultar documentos DFD"
-          description="Confira os documentos vinculados aos itens consolidados."
-          to="/dfds"
-          icon="bi-collection"
-          actionLabel="Consultar"
-        />
+        {isAdmin && (
+          <ActionCard
+            title="Consultar documentos DFD"
+            description="Confira os documentos vinculados aos itens consolidados."
+            to="/dfds"
+            icon="bi-collection"
+            actionLabel="Consultar"
+          />
+        )}
         <ActionCard
           title="Consultar catálogo"
           description="Pesquise itens e serviços antes de preencher uma demanda."

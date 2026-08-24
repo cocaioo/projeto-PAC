@@ -8,6 +8,7 @@ import DemandaDetail from "./DemandaDetail";
 
 const initialDemand = {
   id: 7,
+  pode_editar: true,
   unidade_sigla: "STI",
   ano_referencia: 2027,
   usuario_nome: "Ana Silva",
