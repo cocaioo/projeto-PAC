@@ -317,8 +317,14 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
 # Demandas e itens
 # =============================================================================
 
+from apps.api.filters import DemandaFilterSet
+
 class DemandaViewSet(viewsets.ModelViewSet):
     serializer_class = DemandaSerializer
+    filterset_class = DemandaFilterSet
+    search_fields = ["id", "ano_referencia", "observacao", "unidade__sigla", "unidade__nome"]
+    ordering_fields = ["criado_em", "atualizado_em", "enviada_em", "status"]
+    ordering = ["-criado_em"]
 
     def get_queryset(self):
         from django.db.models import Prefetch
