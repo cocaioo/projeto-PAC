@@ -36,7 +36,7 @@ test("Admin Master define perfil e grupo ao aprovar uma solicitação", async ({
   expect(pending).toBeTruthy();
   expect(pending).not.toHaveProperty("senha_hash");
 
-  await page.goto("/admin/usuarios");
+  await page.goto("/gestao/usuarios");
   const row = page.getByRole("row").filter({ hasText: email });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Aprovar" }).click();
@@ -51,12 +51,14 @@ test("Admin Master define perfil e grupo ao aprovar uma solicitação", async ({
   const groupId = await groupOption.getAttribute("value");
   await groupSelect.selectOption(groupId);
 
-  const approvalRequest = page.waitForRequest((request) =>
-    request.url().endsWith(`/api/admin/solicitacoes/${pending.id}/aprovar/`)
-      && request.method() === "POST"
+  const approvalResponse = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/admin/solicitacoes/${pending.id}/aprovar/`)
+      && response.request().method() === "POST"
   );
   await dialog.getByRole("button", { name: /Confirmar aprova..o/i }).click();
-  expect((await approvalRequest).postDataJSON()).toEqual({
+  const completedApproval = await approvalResponse;
+  expect(completedApproval.status()).toBe(200);
+  expect(completedApproval.request().postDataJSON()).toEqual({
     perfil: "admin",
     grupos_administrados: [Number(groupId)],
   });

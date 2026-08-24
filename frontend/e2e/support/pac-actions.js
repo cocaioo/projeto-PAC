@@ -41,6 +41,18 @@ export async function browserApi(page, path, { method = "GET", body } = {}) {
   }, { requestPath: path, requestMethod: method, requestBody: body });
 }
 
+function apiResults(data) {
+  return Array.isArray(data) ? data : data?.results || [];
+}
+
+async function findCatalogItem(page, itemName) {
+  const response = await browserApi(page, `/catalogo/?q=${encodeURIComponent(itemName)}`);
+  expect(response.status).toBe(200);
+  const item = apiResults(response.data).find((entry) => entry.nome === itemName);
+  if (!item) throw new Error(`Item de catalogo E2E nao encontrado: ${itemName}.`);
+  return item;
+}
+
 export async function clickCriticalAction(page, trigger, confirmationName) {
   let nativeDialogHandled = false;
   const acceptNativeDialog = async (dialog) => {
@@ -131,6 +143,48 @@ export async function openDemandForValidation(page, demandId) {
   await expect(page).toHaveURL(new RegExp(`/validacoes/${demandId}$`, "u"));
 }
 
+export async function createDraftWithCatalogItems(page, marker, itemDefinitions) {
+  const referenceYear = new Date().getFullYear() + 1;
+  const demandResponse = await browserApi(page, "/demandas/", {
+    method: "POST",
+    body: {
+      ano_referencia: referenceYear,
+      observacao: marker,
+    },
+  });
+  expect(demandResponse.status).toBe(201);
+
+  const items = [];
+  for (const [index, definition] of itemDefinitions.entries()) {
+    const catalogItem = await findCatalogItem(page, definition.name);
+    const itemResponse = await browserApi(page, `/demandas/${demandResponse.data.id}/itens/`, {
+      method: "POST",
+      body: {
+        item_catalogo: catalogItem.id,
+        quantidade: definition.quantity || index + 1,
+        data_prevista: `${referenceYear}-06-${String(15 + index).padStart(2, "0")}`,
+        prioridade: "media",
+        justificativa_prioridade: "",
+        justificativa_necessidade: `Necessidade multi-grupo ${marker}`,
+        indicacao_orcamentaria: "Recursos institucionais E2E",
+        observacoes: `${marker} - ${definition.name}`,
+      },
+    });
+    expect(itemResponse.status).toBe(201);
+    items.push({
+      id: itemResponse.data.id,
+      name: itemResponse.data.nome,
+      catalogItemId: itemResponse.data.item_catalogo,
+    });
+  }
+
+  return {
+    demandId: demandResponse.data.id,
+    items,
+    referenceYear,
+  };
+}
+
 export async function validateItem(page, itemName = CATALOG_ITEM) {
   const row = page.getByRole("row").filter({ hasText: itemName });
   await clickCriticalAction(
@@ -144,6 +198,7 @@ export async function validateItem(page, itemName = CATALOG_ITEM) {
 export async function consolidateValidatedItem(page, {
   dfdNumber,
   itemName = CATALOG_ITEM,
+  groupName = CATALOG_GROUP,
   referenceYear,
 } = {}) {
   await page.goto("/dfds/consolidar");
@@ -161,7 +216,7 @@ export async function consolidateValidatedItem(page, {
 
   const groupSelect = page.getByLabel(/Grupo de contrata..o/i);
   if (await groupSelect.count()) {
-    const groupOption = groupSelect.locator("option").filter({ hasText: CATALOG_GROUP }).first();
+    const groupOption = groupSelect.locator("option").filter({ hasText: groupName }).first();
     await expect(groupOption).toHaveCount(1);
     await groupSelect.selectOption(await groupOption.getAttribute("value"));
   }
@@ -190,13 +245,19 @@ export async function returnItem(page, reason, itemName = CATALOG_ITEM) {
   await expect(page.getByText(new RegExp(`${itemName} foi devolvido ao solicitante`, "i"))).toBeVisible();
 }
 
-export async function correctAndResubmitItem(page, { demandId, itemId, marker, reason }) {
+export async function correctAndResubmitItem(page, {
+  demandId,
+  itemId,
+  itemName = CATALOG_ITEM,
+  marker,
+  reason,
+}) {
   await page.goto(`/demandas/${demandId}`);
-  const note = page.getByRole("note", { name: new RegExp(`Motivo da devolu..o do item ${CATALOG_ITEM}`, "i") });
+  const note = page.getByRole("note", { name: new RegExp(`Motivo da devolu..o do item ${itemName}`, "i") });
   await expect(note).toContainText(reason);
 
-  const row = page.getByRole("row").filter({ hasText: CATALOG_ITEM });
-  await row.getByRole("link", { name: new RegExp(`Editar item ${CATALOG_ITEM}`, "i") }).click();
+  const row = page.getByRole("row").filter({ hasText: itemName });
+  await row.getByRole("link", { name: new RegExp(`Editar item ${itemName}`, "i") }).click();
   await expect(page).toHaveURL(new RegExp(`/demandas/${demandId}/itens/${itemId}/editar$`, "u"));
   await page.getByLabel(/Quantidade/i).fill("3");
   await page.getByLabel(/Observa..es do solicitante/i).fill(`Corrigido: ${marker}`);
