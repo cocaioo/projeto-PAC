@@ -329,3 +329,20 @@ export function Navigate({ to, replace = false }) {
 
   return null;
 }
+
+export function useSearchParams() {
+  const router = useRouter();
+  const searchParams = useMemo(() => new URLSearchParams(router.search), [router.search]);
+
+  const setSearchParams = useCallback((nextInit) => {
+    let nextStr = "";
+    if (typeof nextInit === "function") {
+      nextStr = new URLSearchParams(nextInit(searchParams)).toString();
+    } else {
+      nextStr = new URLSearchParams(nextInit).toString();
+    }
+    router.navigate("?" + nextStr, { replace: true });
+  }, [router, searchParams]);
+
+  return [searchParams, setSearchParams];
+}
