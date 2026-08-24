@@ -23,7 +23,10 @@ function Consumer() {
 }
 
 describe("AuthContext", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     api.csrf.mockResolvedValue({});
   });
 
@@ -61,7 +64,7 @@ describe("AuthContext", () => {
       </AuthProvider>
     );
     await waitFor(() => screen.getByText("usuario: anonimo"));
-    await userEvent.click(screen.getByText("entrar"));
+    await testUser.click(screen.getByText("entrar"));
     await waitFor(() =>
       expect(screen.getByText("usuario: ana")).toBeInTheDocument()
     );

@@ -28,10 +28,11 @@ afterAll(() => server.close());
 
 describe("CatalogItemAutocomplete integrado à API", () => {
   it("pesquisa e entrega o item escolhido", async () => {
+    const user = userEvent.setup();
     const onSelect = vi.fn();
     render(<CatalogItemAutocomplete onSelect={onSelect} />);
-    await userEvent.type(screen.getByRole("combobox"), "note");
-    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+    await user.type(screen.getByRole("combobox"), "note");
+    await user.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 5, grupo_nome: "TIC" }));
   });
 });

@@ -154,6 +154,7 @@ describe("ValidacoesList", () => {
     expect(api.listPendentes).not.toHaveBeenCalled();
     expect(api.listUnidades).not.toHaveBeenCalled();
     expect(api.listGrupos).not.toHaveBeenCalled();
+    expect(screen.getByText("Verificando permissoes...")).toBeInTheDocument();
   });
 
   // Bug #4: após AuthContext terminar com isAdmin=true, o fetch deve ocorrer.

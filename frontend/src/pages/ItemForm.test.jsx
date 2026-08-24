@@ -38,7 +38,10 @@ async function preencherObrigatorios(user) {
 
 
 describe("ItemForm", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     vi.clearAllMocks();
     api.getDemanda.mockResolvedValue({ itens: [] });
   });
@@ -69,7 +72,7 @@ describe("ItemForm", () => {
       route: "/demandas/7/itens/novo",
       path: "/demandas/:id/itens/novo",
     });
-    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    await testUser.click(screen.getByRole("button", { name: /adicionar item/i }));
     expect(api.addItem).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/^nome$/i)).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText(/informe o nome do item/i)).toHaveAttribute("role", "alert");
@@ -91,9 +94,9 @@ describe("ItemForm", () => {
       path: "/demandas/:id/itens/novo",
     });
     await waitFor(() => expect(api.getDemanda).toHaveBeenCalledWith("7"));
-    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
-    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
-    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+    await testUser.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await testUser.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await testUser.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
     expect(screen.getByText(/já foi adicionado à demanda/i)).toBeInTheDocument();
     expect(api.addItem).not.toHaveBeenCalled();
   });
@@ -190,7 +193,7 @@ describe("ItemForm", () => {
       path: "/demandas/:id/itens/novo",
     });
     await preencherObrigatorios();
-    await userEvent.click(
+    await testUser.click(
       screen.getByRole("button", { name: /adicionar item/i })
     );
     expect(
@@ -229,10 +232,10 @@ describe("ItemForm", () => {
     expect(screen.getByLabelText(/^nome$/i)).toHaveValue("Impressora Laser");
     expect(screen.getByLabelText(/observações do solicitante/i)).toHaveValue("Marca especificada");
 
-    await userEvent.clear(screen.getByLabelText(/observações do solicitante/i));
-    await userEvent.type(screen.getByLabelText(/observações do solicitante/i), "Observação atualizada");
+    await testUser.clear(screen.getByLabelText(/observações do solicitante/i));
+    await testUser.type(screen.getByLabelText(/observações do solicitante/i), "Observação atualizada");
 
-    await userEvent.click(screen.getByRole("button", { name: /salvar alterações/i }));
+    await testUser.click(screen.getByRole("button", { name: /salvar alterações/i }));
 
     await waitFor(() => expect(api.updateItem).toHaveBeenCalledTimes(1));
     const [itemId, payload] = api.updateItem.mock.calls[0];
@@ -364,16 +367,16 @@ describe("ItemForm", () => {
     const reenviar = screen.getByRole("button", { name: /reenviar/i });
     expect(reenviar).not.toBeDisabled();
 
-    await userEvent.type(screen.getByLabelText(/observa/i), "Ajustado");
+    await testUser.type(screen.getByLabelText(/observa/i), "Ajustado");
     expect(screen.getByRole("button", { name: /reenviar/i })).toBeDisabled();
     expect(screen.getByText(/salve as altera/i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /salvar altera/i }));
+    await testUser.click(screen.getByRole("button", { name: /salvar altera/i }));
     await waitFor(() => expect(api.updateItem).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("button", { name: /reenviar/i })).not.toBeDisabled();
 
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
-    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledWith("10"));
   });
 
@@ -404,9 +407,9 @@ describe("ItemForm", () => {
     });
 
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
-    await userEvent.clear(screen.getByLabelText(/quantidade/i));
-    await userEvent.type(screen.getByLabelText(/quantidade/i), "0");
-    await userEvent.click(screen.getByRole("button", { name: /salvar altera/i }));
+    await testUser.clear(screen.getByLabelText(/quantidade/i));
+    await testUser.type(screen.getByLabelText(/quantidade/i), "0");
+    await testUser.click(screen.getByRole("button", { name: /salvar altera/i }));
 
     expect(await screen.findByText(/quantidade deve ser maior que zero/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reenviar/i })).toBeDisabled();
@@ -503,9 +506,9 @@ describe("ItemForm", () => {
     });
 
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     expect(api.reenviarItem).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
+    await testUser.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledTimes(1));
     expect(api.reenviarItem).toHaveBeenCalledWith("10");
     expect(api.reenviarItem.mock.calls[0]).toHaveLength(1);
@@ -543,9 +546,9 @@ describe("ItemForm", () => {
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
     const salvar = screen.getByRole("button", { name: /salvar altera/i });
     const reenviar = screen.getByRole("button", { name: /reenviar/i });
-    await userEvent.click(reenviar);
+    await testUser.click(reenviar);
     const confirmar = screen.getByRole("button", { name: /confirmar reenvio/i });
-    await userEvent.dblClick(confirmar);
+    await testUser.dblClick(confirmar);
     expect(reenviar).toBeDisabled();
     expect(confirmar).toBeDisabled();
     expect(salvar).toBeDisabled();

@@ -77,7 +77,7 @@ function safeServerMessage(data) {
   }
   if (typeof candidate !== "string") return "";
   const cleaned = cleanMessageString(candidate);
-  if (TECHNICAL_DETAIL.test(cleaned)) return "";
+  if (!cleaned || /<\/?[a-z][^>]*>/iu.test(cleaned) || TECHNICAL_DETAIL.test(cleaned)) return "";
   return cleaned;
 }
 

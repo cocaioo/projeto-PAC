@@ -51,6 +51,22 @@ jobs:
   test:
     name: Testes (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pac_db
+          POSTGRES_USER: pac_user
+          POSTGRES_PASSWORD: pac_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pac_user -d pac_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://pac_user:pac_password@localhost:5432/pac_db
     strategy:
       fail-fast: false
       matrix:

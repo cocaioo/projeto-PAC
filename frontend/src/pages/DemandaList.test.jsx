@@ -14,7 +14,10 @@ vi.mock("../api/client", async (importOriginal) => {
 });
 
 describe("DemandaList", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     api.listDemandas.mockReset();
   });
 
@@ -57,7 +60,7 @@ describe("DemandaList", () => {
     renderWithRouter(<DemandaList />);
 
     expect(await screen.findByText(/falha ao consultar demandas/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /tentar novamente/i }));
+    await testUser.click(screen.getByRole("button", { name: /tentar novamente/i }));
 
     expect(await screen.findByText(/nenhuma demanda cadastrada/i)).toBeInTheDocument();
     expect(api.listDemandas).toHaveBeenCalledTimes(2);
@@ -125,29 +128,29 @@ describe("DemandaList", () => {
     expect(tabConcluidas).toHaveTextContent("1");
 
     // Click Rascunhos
-    await userEvent.click(tabRascunhos);
+    await testUser.click(tabRascunhos);
     expect(screen.getByText("STI")).toBeInTheDocument();
     expect(screen.queryByText("PROPLAN")).not.toBeInTheDocument();
     expect(screen.queryByText("CCE")).not.toBeInTheDocument();
     expect(screen.queryByText("PREG")).not.toBeInTheDocument();
 
     // Click Aguardando validação
-    await userEvent.click(tabAguardando);
+    await testUser.click(tabAguardando);
     expect(screen.queryByText("STI")).not.toBeInTheDocument();
     expect(screen.getByText("PROPLAN")).toBeInTheDocument();
 
     // Click Ação necessária / Devolvidas
-    await userEvent.click(tabAcaoNecessaria);
+    await testUser.click(tabAcaoNecessaria);
     expect(screen.queryByText("PROPLAN")).not.toBeInTheDocument();
     expect(screen.getByText("CCE")).toBeInTheDocument();
 
     // Click Concluídas
-    await userEvent.click(tabConcluidas);
+    await testUser.click(tabConcluidas);
     expect(screen.queryByText("CCE")).not.toBeInTheDocument();
     expect(screen.getByText("PREG")).toBeInTheDocument();
 
     // Click Todas
-    await userEvent.click(tabTodas);
+    await testUser.click(tabTodas);
     expect(screen.getByText("STI")).toBeInTheDocument();
     expect(screen.getByText("PROPLAN")).toBeInTheDocument();
     expect(screen.getByText("CCE")).toBeInTheDocument();
@@ -183,23 +186,23 @@ describe("DemandaList", () => {
     const searchInput = screen.getByLabelText(/buscar demandas/i);
 
     // Search by ID
-    await userEvent.type(searchInput, "101");
+    await testUser.type(searchInput, "101");
     expect(screen.getByText("STI")).toBeInTheDocument();
     expect(screen.queryByText("CCS")).not.toBeInTheDocument();
 
     // Clear search
-    await userEvent.clear(searchInput);
+    await testUser.clear(searchInput);
     expect(screen.getByText("STI")).toBeInTheDocument();
     expect(screen.getByText("CCS")).toBeInTheDocument();
 
     // Search by year
-    await userEvent.type(searchInput, "2026");
+    await testUser.type(searchInput, "2026");
     expect(screen.queryByText("STI")).not.toBeInTheDocument();
     expect(screen.getByText("CCS")).toBeInTheDocument();
 
     // Search by observation
-    await userEvent.clear(searchInput);
-    await userEvent.type(searchInput, "computadores");
+    await testUser.clear(searchInput);
+    await testUser.type(searchInput, "computadores");
     expect(screen.getByText("STI")).toBeInTheDocument();
     expect(screen.queryByText("CCS")).not.toBeInTheDocument();
   });
@@ -222,13 +225,13 @@ describe("DemandaList", () => {
     expect(await screen.findByText("STI")).toBeInTheDocument();
 
     const searchInput = screen.getByLabelText(/buscar demandas/i);
-    await userEvent.type(searchInput, "termo_inexistente");
+    await testUser.type(searchInput, "termo_inexistente");
 
     expect(await screen.findByText(/nenhuma demanda encontrada/i)).toBeInTheDocument();
     expect(screen.queryByText("STI")).not.toBeInTheDocument();
 
     const clearButton = screen.getByRole("button", { name: /limpar filtros/i });
-    await userEvent.click(clearButton);
+    await testUser.click(clearButton);
 
     expect(await screen.findByText("STI")).toBeInTheDocument();
     expect(searchInput).toHaveValue("");

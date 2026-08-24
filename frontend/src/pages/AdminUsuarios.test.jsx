@@ -25,7 +25,10 @@ vi.mock("../api/client", async () => {
 });
 
 describe("AdminUsuarios", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     vi.clearAllMocks();
     api.listSolicitacoes.mockResolvedValue([]);
     api.listUsuariosAdmin.mockResolvedValue([]);
@@ -38,7 +41,10 @@ describe("AdminUsuarios", () => {
 
   it("renderiza a aba de solicitações por padrão", async () => {
     renderWithRouter(<AdminUsuarios />);
-    expect(screen.getByText("Gestão de Usuários")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Gestão de Usuários")).toBeInTheDocument();
+      expect(screen.getByLabelText(/Filtrar por Status:/i)).toBeInTheDocument();
+    });
     expect(screen.getByText("Solicitações de Acesso", { selector: 'button' })).toHaveClass("active");
   });
 
@@ -54,7 +60,7 @@ describe("AdminUsuarios", () => {
     });
 
     api.aprovarSolicitacao.mockResolvedValue({});
-    await userEvent.click(screen.getByText("Aprovar"));
+    await testUser.click(screen.getByText("Aprovar"));
     expect(window.confirm).toHaveBeenCalledWith("Confirmar aprovação?");
     expect(api.aprovarSolicitacao).toHaveBeenCalledWith(1);
   });
@@ -70,14 +76,14 @@ describe("AdminUsuarios", () => {
       expect(screen.getByText("João")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText("Rejeitar"));
+    await testUser.click(screen.getByText("Rejeitar"));
     
     // Modal opens
     const motivoInput = screen.getByLabelText(/Motivo/i);
-    await userEvent.type(motivoInput, "Não autorizado");
+    await testUser.type(motivoInput, "Não autorizado");
     
     api.rejeitarSolicitacao.mockResolvedValue({});
-    await userEvent.click(screen.getByText("Confirmar Rejeição"));
+    await testUser.click(screen.getByText("Confirmar Rejeição"));
     
     expect(api.rejeitarSolicitacao).toHaveBeenCalledWith(1, { motivo_rejeicao: "Não autorizado" });
   });
@@ -85,23 +91,23 @@ describe("AdminUsuarios", () => {
   it("navega para aba de criar usuário, preenche form e salva", async () => {
     renderWithRouter(<AdminUsuarios />);
     
-    await userEvent.click(screen.getByText("Criar Usuário", { selector: 'button' }));
+    await testUser.click(screen.getByText("Criar Usuário", { selector: 'button' }));
     
     await waitFor(() => {
       expect(screen.getByLabelText(/Nome Completo/i)).toBeInTheDocument();
     });
 
-    await userEvent.type(screen.getByLabelText(/Nome Completo/i), "Novo Admin");
-    await userEvent.type(screen.getByLabelText(/E-mail/i), "admin@ufpi.br");
+    await testUser.type(screen.getByLabelText(/Nome Completo/i), "Novo Admin");
+    await testUser.type(screen.getByLabelText(/E-mail/i), "admin@ufpi.br");
     
     const perfilSelect = screen.getByLabelText(/Perfil/i);
-    await userEvent.selectOptions(perfilSelect, "admin");
-    await userEvent.selectOptions(screen.getByLabelText(/Unidade/i), "1");
+    await testUser.selectOptions(perfilSelect, "admin");
+    await testUser.selectOptions(screen.getByLabelText(/Unidade/i), "1");
     
-    await userEvent.type(screen.getByLabelText(/Senha/i), "senha123");
+    await testUser.type(screen.getByLabelText(/Senha/i), "senha123");
     
     api.createUsuarioAdmin.mockResolvedValue({});
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Usuário" }));
+    await testUser.click(screen.getByRole("button", { name: "Salvar Usuário" }));
     
     expect(api.createUsuarioAdmin).toHaveBeenCalledWith(expect.objectContaining({
       nome_completo: "Novo Admin",
@@ -119,14 +125,14 @@ describe("AdminUsuarios", () => {
 
     renderWithRouter(<AdminUsuarios />);
     
-    await userEvent.click(screen.getByText("Usuários Cadastrados", { selector: 'button' }));
+    await testUser.click(screen.getByText("Usuários Cadastrados", { selector: 'button' }));
     
     await waitFor(() => {
       expect(screen.getByText("Maria")).toBeInTheDocument();
     });
 
     api.updateUsuarioStatus.mockResolvedValue({});
-    await userEvent.click(screen.getByText("Desativar"));
+    await testUser.click(screen.getByText("Desativar"));
     
     expect(window.confirm).toHaveBeenCalled();
     expect(api.updateUsuarioStatus).toHaveBeenCalledWith(2, { is_active: false });
@@ -135,7 +141,7 @@ describe("AdminUsuarios", () => {
   it("filtra solicitações de acesso por status", async () => {
     renderWithRouter(<AdminUsuarios />);
     const selectFiltro = await screen.findByLabelText(/Filtrar por Status:/i);
-    await userEvent.selectOptions(selectFiltro, "aprovado");
+    await testUser.selectOptions(selectFiltro, "aprovado");
 
     expect(api.listSolicitacoes).toHaveBeenCalledWith({ status: "aprovado" });
   });
@@ -146,14 +152,14 @@ describe("AdminUsuarios", () => {
     api.createUsuarioAdmin.mockRejectedValue(error);
 
     renderWithRouter(<AdminUsuarios />);
-    await userEvent.click(screen.getByText("Criar Usuário", { selector: 'button' }));
+    await testUser.click(screen.getByText("Criar Usuário", { selector: 'button' }));
 
-    await userEvent.type(screen.getByLabelText(/Nome Completo/i), "Teste");
-    await userEvent.type(screen.getByLabelText(/E-mail/i), "invalido@teste.com");
-    await userEvent.selectOptions(screen.getByLabelText(/Unidade/i), "1");
-    await userEvent.type(screen.getByLabelText(/Senha/i), "123456");
+    await testUser.type(screen.getByLabelText(/Nome Completo/i), "Teste");
+    await testUser.type(screen.getByLabelText(/E-mail/i), "invalido@teste.com");
+    await testUser.selectOptions(screen.getByLabelText(/Unidade/i), "1");
+    await testUser.type(screen.getByLabelText(/Senha/i), "123456");
 
-    await userEvent.click(screen.getByRole("button", { name: "Salvar Usuário" }));
+    await testUser.click(screen.getByRole("button", { name: "Salvar Usuário" }));
 
     expect(await screen.findByText(/e-mail inválido ou já existente/i)).toBeInTheDocument();
   });
@@ -165,17 +171,16 @@ describe("AdminUsuarios", () => {
 
     renderWithRouter(<AdminUsuarios />);
     
-    await userEvent.click(screen.getByText("Usuários Cadastrados", { selector: 'button' }));
+    await testUser.click(screen.getByText("Usuários Cadastrados", { selector: 'button' }));
     
     await waitFor(() => {
       expect(screen.getByText("Carlos")).toBeInTheDocument();
     });
 
     api.deleteUsuarioAdmin.mockResolvedValue({ message: "Usuário excluído com sucesso." });
-    await userEvent.click(screen.getByRole("button", { name: /Excluir/i }));
+    await testUser.click(screen.getByRole("button", { name: /Excluir/i }));
     
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("excluir permanentemente o registro da conta"));
     expect(api.deleteUsuarioAdmin).toHaveBeenCalledWith(3);
   });
 });
-

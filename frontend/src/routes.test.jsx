@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import AppRoutes from "./routes";
 import * as AuthModule from "./auth/AuthContext";
@@ -98,9 +98,11 @@ describe("AppRoutes", () => {
     expect(await screen.findByRole("heading", { name: "DFDs" })).toBeInTheDocument();
   });
 
-  it("mostra a página de Solicitar Acesso publicamente", () => {
+  it("mostra a página de Solicitar Acesso publicamente", async () => {
     renderAt("/solicitar-acesso", { user: null, loading: false, isAdmin: false, isAdminMaster: false });
-    expect(screen.getByRole("heading", { name: /solicitar acesso/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /solicitar acesso/i })).toBeInTheDocument();
+    });
   });
 
   it("bloqueia /admin/usuarios para admin comum", () => {

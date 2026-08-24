@@ -7,8 +7,10 @@ import * as AuthModule from "../auth/AuthContext";
 
 describe("Login", () => {
   const login = vi.fn();
+  let testUser;
 
   beforeEach(() => {
+    testUser = userEvent.setup();
     vi.spyOn(AuthModule, "useAuth").mockReturnValue({ login, user: null });
   });
 
@@ -26,9 +28,9 @@ describe("Login", () => {
       path: "/login",
       extraRoutes: [{ path: "/", element: <p>inicio</p> }],
     });
-    await userEvent.type(screen.getByLabelText(/usuário/i), "ana");
-    await userEvent.type(screen.getByLabelText(/senha/i), "senha123");
-    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    await testUser.type(screen.getByLabelText(/usuário/i), "ana");
+    await testUser.type(screen.getByLabelText(/senha/i), "senha123");
+    await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(login).toHaveBeenCalledWith("ana", "senha123");
     await waitFor(() => expect(screen.getByText("inicio")).toBeInTheDocument());
@@ -37,9 +39,9 @@ describe("Login", () => {
   it("mostra mensagem de erro quando o login falha", async () => {
     login.mockRejectedValue(new Error("Credenciais inválidas."));
     renderWithRouter(<Login />, { route: "/login", path: "/login" });
-    await userEvent.type(screen.getByLabelText(/usuário/i), "ana");
-    await userEvent.type(screen.getByLabelText(/senha/i), "errada");
-    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    await testUser.type(screen.getByLabelText(/usuário/i), "ana");
+    await testUser.type(screen.getByLabelText(/senha/i), "errada");
+    await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(
       await screen.findByText(/credenciais inválidas/i)
@@ -60,9 +62,9 @@ describe("Login", () => {
       path: "/login",
       extraRoutes: [{ path: "/", element: <p>inicio</p> }],
     });
-    await userEvent.type(screen.getByLabelText(/usuário/i), "  ana.maria@ufpi.edu.br  ");
-    await userEvent.type(screen.getByLabelText(/senha/i), "senha123");
-    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    await testUser.type(screen.getByLabelText(/usuário/i), "  ana.maria@ufpi.edu.br  ");
+    await testUser.type(screen.getByLabelText(/senha/i), "senha123");
+    await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(login).toHaveBeenCalledWith("ana.maria@ufpi.edu.br", "senha123");
     await waitFor(() => expect(screen.getByText("inicio")).toBeInTheDocument());
@@ -74,9 +76,9 @@ describe("Login", () => {
     login.mockRejectedValue(error401);
 
     renderWithRouter(<Login />, { route: "/login", path: "/login" });
-    await userEvent.type(screen.getByLabelText(/usuário/i), "usuario@ufpi.edu.br");
-    await userEvent.type(screen.getByLabelText(/senha/i), "senha");
-    await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    await testUser.type(screen.getByLabelText(/usuário/i), "usuario@ufpi.edu.br");
+    await testUser.type(screen.getByLabelText(/senha/i), "senha");
+    await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(
       await screen.findByText(/credenciais inválidas/i)

@@ -26,15 +26,15 @@ Foram adicionados testes para admin da unidade solicitante validar e cancelar de
 
 `Unidade`, `GrupoContratacao` e `ItemCatalogo` ja possuiam o campo `ativo`; portanto, criar o campo de soft delete nao era necessario. O problema confirmado era o `destroy` padrao deixar `ProtectedError` virar 500.
 
-Os endpoints agora retornam `409 Conflict` com orientacao para desativar o registro quando houver dependencias protegidas. O tratamento tambem foi aplicado a demanda e item de demanda para impedir erros internos semelhantes.
+Os endpoints agora retornam `409 Conflict` com orientacao para desativar o registro quando houver dependencias protegidas. O tratamento tambem foi aplicado a demanda, item de demanda e item de catalogo para impedir erros internos semelhantes.
 
-**Status:** corrigido e coberto por testes para unidade e grupo.
+**Status:** corrigido e coberto por testes para unidade, grupo e catalogo.
 
 ## 2. Front-end
 
 ### 2.1 Carregamento de autenticacao
 
-`AuthContext` ja expunha `loading` e as requisicoes das telas de validacao ja aguardavam o carregamento. Faltava evitar o flash de `Acesso restrito` durante esse intervalo. As telas agora exibem estado de carregamento antes de decidir o acesso.
+`AuthContext` ja expunha `loading` e as requisicoes das telas de validacao ja aguardavam o carregamento. Faltava evitar o flash de `Acesso restrito` durante esse intervalo em `ValidacoesList`. As telas agora exibem estado de carregamento antes de decidir o acesso, com teste explicito desse estado.
 
 **Status:** corrigido.
 
@@ -62,9 +62,9 @@ Os endpoints genericos paginados continuam exigindo fixtures de teste coerentes 
 
 Playwright, fixtures E2E e fluxo MVP ja existem no repositorio. MSW tambem ja existe. A alegacao de que nao havia cobertura E2E estava desatualizada.
 
-O uso de `userEvent.setup()` foi aplicado em parte dos testes de integracao, mas ainda existem testes unitarios usando os helpers de conveniencia do pacote. Como a suite atual passa e esses helpers sao suportados pelo `user-event` instalado, isso nao foi confirmado como bug de producao; fica como padrao de manutencao recomendado. A auditoria anterior foi corrigida para nao declarar que todos os usos foram migrados.
+Todos os testes que executam interacoes agora usam instancias isoladas de `userEvent.setup()` por teste. Os avisos de `act` identificados na auditoria foram eliminados aguardando os efeitos assincronos das telas.
 
-Permanece uma lacuna: nao ha teste de concorrencia real com `TransactionTestCase`/duas conexoes para provar bloqueio sob disputa. A implementacao agora usa ordem deterministica de locks, mas esse teste deve ser adicionado quando houver ambiente de CI PostgreSQL apropriado.
+Foi adicionado um teste `TransactionTestCase` com duas threads e conexoes PostgreSQL independentes. O CI agora provisiona PostgreSQL para executar esse teste, em vez de ignora-lo sob SQLite.
 
 ## 4. Alteracoes implementadas
 
@@ -73,14 +73,16 @@ Permanece uma lacuna: nao ha teste de concorrencia real com `TransactionTestCase
 - Escopo de itens manuais alinhado entre API e views server-side.
 - Tratamento amigavel de `ProtectedError` nos endpoints de exclusao.
 - Parser de respostas text/html e mensagens para erros de infraestrutura.
+- Sanitizacao de HTML tambem quando a resposta vem em `detail` JSON.
 - Error Boundary na raiz da SPA.
-- Testes para texto nao JSON, Error Boundary, escopo manual e exclusoes protegidas.
+- Teste real de bloqueio entre conexoes PostgreSQL.
+- Testes para texto nao JSON, Error Boundary, escopo manual e exclusoes protegidas de catalogo.
 
 ## 5. Validacao
 
 Validacao final:
 
-- Backend Django: `218` testes, `OK`, com `--keepdb`.
+- Backend Django: `219` testes, `OK`, com `--keepdb`.
 - Frontend Vitest: `38` arquivos e `222` testes, todos aprovados.
 - Frontend performance: `5` testes aprovados.
 - Playwright E2E: `11` testes aprovados em `2` arquivos.

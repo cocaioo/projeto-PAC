@@ -18,7 +18,10 @@ vi.mock("../api/client", async () => {
 });
 
 describe("SolicitarAcesso", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     vi.clearAllMocks();
     api.listUnidades.mockResolvedValue([
       { id: 1, nome: "Unidade A" },
@@ -43,13 +46,13 @@ describe("SolicitarAcesso", () => {
     
     await waitFor(() => expect(screen.getByRole("combobox", { name: /unidade/i })).not.toBeDisabled());
 
-    await userEvent.type(screen.getByLabelText(/nome completo/i), "João");
-    await userEvent.type(screen.getByLabelText(/e-mail/i), "joao@ufpi.br");
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
-    await userEvent.type(screen.getByLabelText(/^senha/i), "senha123");
-    await userEvent.type(screen.getByLabelText(/confirmação/i), "senha321");
+    await testUser.type(screen.getByLabelText(/nome completo/i), "João");
+    await testUser.type(screen.getByLabelText(/e-mail/i), "joao@ufpi.br");
+    await testUser.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
+    await testUser.type(screen.getByLabelText(/^senha/i), "senha123");
+    await testUser.type(screen.getByLabelText(/confirmação/i), "senha321");
     
-    await userEvent.click(screen.getByRole("button", { name: /solicitar/i }));
+    await testUser.click(screen.getByRole("button", { name: /solicitar/i }));
 
     expect(screen.getByText("As senhas não coincidem.")).toBeInTheDocument();
     expect(api.solicitarAcesso).not.toHaveBeenCalled();
@@ -61,13 +64,13 @@ describe("SolicitarAcesso", () => {
     
     await waitFor(() => expect(screen.getByRole("combobox", { name: /unidade/i })).not.toBeDisabled());
 
-    await userEvent.type(screen.getByLabelText(/nome completo/i), "João");
-    await userEvent.type(screen.getByLabelText(/e-mail/i), "joao@ufpi.br");
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
-    await userEvent.type(screen.getByLabelText(/^senha/i), "senha123");
-    await userEvent.type(screen.getByLabelText(/confirmação/i), "senha123");
+    await testUser.type(screen.getByLabelText(/nome completo/i), "João");
+    await testUser.type(screen.getByLabelText(/e-mail/i), "joao@ufpi.br");
+    await testUser.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
+    await testUser.type(screen.getByLabelText(/^senha/i), "senha123");
+    await testUser.type(screen.getByLabelText(/confirmação/i), "senha123");
     
-    await userEvent.click(screen.getByRole("button", { name: /solicitar/i }));
+    await testUser.click(screen.getByRole("button", { name: /solicitar/i }));
 
     await waitFor(() => {
       expect(api.solicitarAcesso).toHaveBeenCalledWith({
@@ -84,7 +87,7 @@ describe("SolicitarAcesso", () => {
     // Testa botão voltar para login
     const voltarBtn = screen.getByRole("button", { name: /voltar para o login/i });
     expect(voltarBtn).toBeInTheDocument();
-    await userEvent.click(voltarBtn);
+    await testUser.click(voltarBtn);
   });
 
   it("exibe mensagem de erro geral retornada pela API", async () => {
@@ -95,12 +98,12 @@ describe("SolicitarAcesso", () => {
     renderWithRouter(<SolicitarAcesso />);
     await waitFor(() => expect(screen.getByRole("combobox", { name: /unidade/i })).not.toBeDisabled());
 
-    await userEvent.type(screen.getByLabelText(/nome completo/i), "João");
-    await userEvent.type(screen.getByLabelText(/e-mail/i), "joao@ufpi.edu.br");
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
-    await userEvent.type(screen.getByLabelText(/^senha/i), "senha123");
-    await userEvent.type(screen.getByLabelText(/confirmação/i), "senha123");
-    await userEvent.click(screen.getByRole("button", { name: /solicitar/i }));
+    await testUser.type(screen.getByLabelText(/nome completo/i), "João");
+    await testUser.type(screen.getByLabelText(/e-mail/i), "joao@ufpi.edu.br");
+    await testUser.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
+    await testUser.type(screen.getByLabelText(/^senha/i), "senha123");
+    await testUser.type(screen.getByLabelText(/confirmação/i), "senha123");
+    await testUser.click(screen.getByRole("button", { name: /solicitar/i }));
 
     expect(await screen.findByText(/já existe um usuário com este e-mail/i)).toBeInTheDocument();
   });
@@ -113,12 +116,12 @@ describe("SolicitarAcesso", () => {
     renderWithRouter(<SolicitarAcesso />);
     await waitFor(() => expect(screen.getByRole("combobox", { name: /unidade/i })).not.toBeDisabled());
 
-    await userEvent.type(screen.getByLabelText(/nome completo/i), "João");
-    await userEvent.type(screen.getByLabelText(/e-mail/i), "joao@gmail.com");
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
-    await userEvent.type(screen.getByLabelText(/^senha/i), "senha123");
-    await userEvent.type(screen.getByLabelText(/confirmação/i), "senha123");
-    await userEvent.click(screen.getByRole("button", { name: /solicitar/i }));
+    await testUser.type(screen.getByLabelText(/nome completo/i), "João");
+    await testUser.type(screen.getByLabelText(/e-mail/i), "joao@gmail.com");
+    await testUser.selectOptions(screen.getByRole("combobox", { name: /unidade/i }), "1");
+    await testUser.type(screen.getByLabelText(/^senha/i), "senha123");
+    await testUser.type(screen.getByLabelText(/confirmação/i), "senha123");
+    await testUser.click(screen.getByRole("button", { name: /solicitar/i }));
 
     expect(await screen.findByText(/o e-mail deve pertencer ao domínio @ufpi\.edu\.br/i)).toBeInTheDocument();
   });

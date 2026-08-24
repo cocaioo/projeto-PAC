@@ -10,7 +10,10 @@ vi.mock("../api/client", () => ({
 }));
 
 describe("DemandaForm", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     vi.clearAllMocks();
   });
 
@@ -22,9 +25,9 @@ describe("DemandaForm", () => {
       extraRoutes: [{ path: "/demandas/:id", element: <p>detalhe 42</p> }],
     });
 
-    await userEvent.clear(screen.getByLabelText(/ano de referência/i));
-    await userEvent.type(screen.getByLabelText(/ano de referência/i), "2027");
-    await userEvent.click(screen.getByRole("button", { name: /salvar/i }));
+    await testUser.clear(screen.getByLabelText(/ano de referência/i));
+    await testUser.type(screen.getByLabelText(/ano de referência/i), "2027");
+    await testUser.click(screen.getByRole("button", { name: /salvar/i }));
 
     await waitFor(() =>
       expect(api.createDemanda).toHaveBeenCalledWith(
@@ -40,7 +43,7 @@ describe("DemandaForm", () => {
       route: "/demandas/nova",
       path: "/demandas/nova",
     });
-    await userEvent.click(screen.getByRole("button", { name: /salvar/i }));
+    await testUser.click(screen.getByRole("button", { name: /salvar/i }));
     expect(await screen.findByText(/sem unidade vinculada/i)).toBeInTheDocument();
   });
 

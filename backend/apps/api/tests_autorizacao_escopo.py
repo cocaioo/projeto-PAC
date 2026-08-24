@@ -292,6 +292,19 @@ class CatalogoEscopoEscritaTests(AutorizacaoEscopoBase):
         self.assertEqual(desativado.data["nome"], "Item global")
         self.assertFalse(desativado.data["ativo"])
 
+    def test_exclusao_de_catalogo_referenciado_retorna_conflito_orientado(self):
+        demanda = self._demanda(self.usuario_a, "Demanda com catalogo protegido")
+        self._item(demanda, "Item protegido", self.catalogo_a)
+        self._login(self.admin_master)
+
+        resposta = self.client.delete(
+            reverse("api:catalogo-detail", kwargs={"pk": self.catalogo_a.pk})
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("Desative", resposta.data["detail"])
+        self.assertTrue(ItemCatalogo.objects.filter(pk=self.catalogo_a.pk).exists())
+
 
 class DemandaEscopoAdministrativoTests(AutorizacaoEscopoBase):
     def setUp(self):

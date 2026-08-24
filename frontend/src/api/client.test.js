@@ -75,6 +75,11 @@ describe("api client", () => {
     });
   });
 
+  it("ignora HTML quando ele vem dentro do campo detail", () => {
+    const error = parseApiError(502, { detail: "<html><body>Bad Gateway</body></html>" });
+    expect(error.message).toBe("O servidor nao respondeu. Tente novamente em instantes.");
+  });
+
   it("retorna null em respostas 204", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     expect(await api.logout()).toBeNull();

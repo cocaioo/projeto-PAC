@@ -552,8 +552,8 @@ class ItemDemandaViewSetLegacy(viewsets.ModelViewSet):
             )
         
         with transaction.atomic():
-            response = super().update(request, *args, **kwargs)
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
+            response = super().update(request, *args, **kwargs)
             sincronizar_status_macro_demanda(demanda_locked)
             return response
 
@@ -585,11 +585,16 @@ class ItemDemandaViewSetLegacy(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def reenviar(self, request, pk=None):
         with transaction.atomic():
-            item = ItemDemanda.objects.select_for_update(of=("self",)).select_related("demanda").filter(pk=pk).first()
-            if item is None:
+            item_ref = ItemDemanda.objects.filter(pk=pk).values("demanda_id").first()
+            if item_ref is None:
                 return Response({"detail": "Item não encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-            demanda = Demanda.objects.select_for_update().get(pk=item.demanda_id)
+            demanda = Demanda.objects.select_for_update().get(pk=item_ref["demanda_id"])
+            item = (
+                ItemDemanda.objects.select_for_update(of=("self",))
+                .select_related("demanda")
+                .get(pk=pk, demanda_id=demanda.pk)
+            )
 
             if not self._pode_editar(item):
                 return Response(

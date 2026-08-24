@@ -131,6 +131,8 @@ export default function ValidacoesList() {
   const demandas = useMemo(() => agruparItensPorDemanda(itens), [itens]);
   const gruposEnvolvidos = useMemo(() => new Set(itens.map((item) => item.grupo_nome).filter(Boolean)).size, [itens]);
 
+  if (authLoading) return <LoadingState label="Verificando permissoes..." />;
+
   if (!isAdmin) {
     return (
       <div>
@@ -147,8 +149,6 @@ export default function ValidacoesList() {
       </div>
     );
   }
-
-  if (authLoading) return <LoadingState label="Verificando permissoes..." />;
 
   return (
     <div>
