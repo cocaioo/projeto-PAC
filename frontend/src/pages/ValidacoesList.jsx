@@ -155,7 +155,7 @@ export default function ValidacoesList() {
       <PageHeader
         eyebrow="Administração"
         title="Demandas recebidas"
-        description="Abra uma demanda para validar ou devolver cada item individualmente."
+        description="Cada cartão representa uma demanda. Abra a análise para validar ou devolver cada item individualmente."
       />
 
       {!carregando && !erro && (
@@ -232,10 +232,10 @@ export default function ValidacoesList() {
                     <Link
                       to={`/validacoes/${demanda.id}`}
                       className="pac-button pac-button--primary"
-                      aria-label={`Abrir demanda ${demanda.id}`}
+                      aria-label={`Analisar itens da demanda ${demanda.id}`}
                     >
                       <i className="bi bi-folder2-open" aria-hidden="true" />
-                      Abrir demanda
+                      Analisar itens
                     </Link>
                   </div>
                 )}

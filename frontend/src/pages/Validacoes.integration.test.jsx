@@ -83,7 +83,7 @@ describe("fluxo administrativo de validações", () => {
       ],
     });
 
-    await user.click(await screen.findByRole("link", { name: "Abrir demanda 18" }));
+    await user.click(await screen.findByRole("link", { name: "Analisar itens da demanda 18" }));
     expect(await screen.findByText("Projetor multimídia")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Validar item Projetor multimídia" }));
@@ -145,7 +145,7 @@ describe("fluxo administrativo de validações", () => {
     });
 
     // Admin vê a demanda na fila
-    await user.click(await screen.findByRole("link", { name: "Abrir demanda 18" }));
+    await user.click(await screen.findByRole("link", { name: "Analisar itens da demanda 18" }));
     expect(await screen.findByText("Projetor multimídia")).toBeInTheDocument();
 
     // Admin valida o item

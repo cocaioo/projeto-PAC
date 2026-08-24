@@ -21,10 +21,13 @@ Utilizados nos testes de ponta a ponta (E2E) e para desenvolvimento local ágil 
 | `admin_master_e2e` | `Pac-E2E-Only-2026!` | `admin_master` | STI | Gestão global e visão administrativa completa de todos os grupos |
 
 ### Como popular a massa E2E no banco local:
-```bash
+```powershell
 cd frontend
+$env:PAC_E2E_DATABASE_URL = "postgres://pac_user:pac_password@localhost:5432/pac_e2e"
 python e2e/support/seed_e2e.py
 ```
+
+> Use um banco exclusivo para E2E, como `pac_e2e`. A suíte recusa o banco compartilhado `pac_db` por padrão para evitar misturar dados E2E e de homologação.
 
 ---
 

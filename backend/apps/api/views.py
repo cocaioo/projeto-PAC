@@ -870,6 +870,9 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
     def pendentes(self, request):
         from django.db.models import Prefetch
 
+        demanda_id, erro = self._filtro_id(request, "demanda", "demanda_id")
+        if erro:
+            return erro
         unidade_id, erro = self._filtro_id(request, "unidade", "unidade_id")
         if erro:
             return erro
@@ -901,6 +904,8 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
             .prefetch_related(ultima_devolucao_prefetch)
         )
         itens = self._itens_no_escopo_do_usuario(itens, request.user)
+        if demanda_id is not None:
+            itens = itens.filter(demanda_id=demanda_id)
         if unidade_id is not None:
             itens = itens.filter(demanda__unidade_id=unidade_id)
         if grupo_id is not None:

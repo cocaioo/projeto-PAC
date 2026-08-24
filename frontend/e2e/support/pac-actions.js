@@ -124,7 +124,10 @@ export async function openDemandForValidation(page, demandId) {
   const heading = page.getByRole("heading", { name: `Demanda #${demandId}`, exact: true });
   await expect(heading).toBeVisible();
   const demandCard = heading.locator("xpath=ancestor::section");
-  await demandCard.getByRole("link", { name: new RegExp(`Abrir demanda ${demandId}`, "i") }).click();
+  const pending = await browserApi(page, `/validacoes/pendentes/?demanda=${demandId}`);
+  expect(pending.status).toBe(200);
+  expect(pending.data.some((item) => Number(item.demanda_id) === Number(demandId))).toBeTruthy();
+  await demandCard.getByRole("link", { name: new RegExp(`Analisar itens da demanda ${demandId}`, "i") }).click();
   await expect(page).toHaveURL(new RegExp(`/validacoes/${demandId}$`, "u"));
 }
 

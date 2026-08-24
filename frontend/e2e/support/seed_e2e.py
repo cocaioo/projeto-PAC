@@ -103,6 +103,11 @@ def seed():
         usuario.set_password(PASSWORD)
         usuario.save(update_fields=["password"])
 
+    # O escopo dos validadores E2E precisa ser explícito, sem depender do
+    # fallback legado pela unidade administrativa.
+    Usuario.objects.get(username="admin_e2e").grupos_administrados.set([grupo_principal])
+    Usuario.objects.get(username="admin_outro_e2e").grupos_administrados.set([grupo_outro])
+
 
 if __name__ == "__main__":
     seed()

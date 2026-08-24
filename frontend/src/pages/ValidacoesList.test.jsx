@@ -92,7 +92,7 @@ describe("ValidacoesList", () => {
     expect(await screen.findByRole("heading", { name: "Demanda #12" })).toBeInTheDocument();
     expect(screen.getByText("Maria Solicitante")).toBeInTheDocument();
     expect(screen.getByText("2 itens pendentes")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Abrir demanda 12" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Analisar itens da demanda 12" })).toHaveAttribute(
       "href",
       "/validacoes/12"
     );
@@ -142,7 +142,7 @@ describe("ValidacoesList", () => {
 
     expect(screen.getByText("Acesso restrito")).toBeInTheDocument();
     expect(api.listPendentes).not.toHaveBeenCalled();
-    expect(screen.queryByRole("link", { name: /abrir demanda/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /analisar itens/i })).not.toBeInTheDocument();
   });
 
   // Bug #4: race condition — AuthContext ainda carregando não deve disparar fetch.
