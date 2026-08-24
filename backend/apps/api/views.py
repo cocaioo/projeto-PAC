@@ -53,6 +53,7 @@ from apps.usuarios.services import (
 from apps.validacoes.models import TipoAcao, Validacao
 
 from .permissions import IsAdminMasterUserPermission, IsAdminUserPermission
+from .filters import DemandaFilterSet
 from .serializers import (
     DemandaSerializer,
     DFDSerializer,
@@ -316,8 +317,6 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
 # =============================================================================
 # Demandas e itens
 # =============================================================================
-
-from apps.api.filters import DemandaFilterSet
 
 class DemandaViewSet(viewsets.ModelViewSet):
     serializer_class = DemandaSerializer

@@ -1,9 +1,6 @@
 import django_filters
 from django.db.models import Q, Sum
 from apps.demandas.models import Demanda, StatusDemanda
-from apps.validacoes.models import TipoAcao, Validacao
-from apps.api.views import itens_no_escopo_do_usuario
-from apps.demandas.models import ItemDemanda
 
 class DemandaFilterSet(django_filters.FilterSet):
     status = django_filters.ChoiceFilter(choices=StatusDemanda.choices)

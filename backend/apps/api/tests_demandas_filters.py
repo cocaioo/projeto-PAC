@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from apps.demandas.models import Demanda, StatusDemanda, ItemDemanda, Prioridade, TipoItem
 from apps.unidades.models import Unidade
-from apps.catalogo.models import ItemCatalogo
 from decimal import Decimal
 from datetime import date
 

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import ApiErrorMessage from "../components/ApiErrorMessage";
@@ -235,7 +235,7 @@ export default function DemandaList() {
                 return (
                   <tr key={demanda.id} className="pac-table__row-link">
                     <td className="fw-semibold">
-                      <Link to={"/demandas/"}>
+                      <Link to={`/demandas/${demanda.id}`}>
                         #{demanda.id}
                       </Link>
                     </td>
@@ -248,9 +248,9 @@ export default function DemandaList() {
                     <td><NextAction action={nextAction} compact /></td>
                     <td className="text-end">
                       <Link
-                        to={"/demandas/"}
+                        to={`/demandas/${demanda.id}`}
                         className="pac-button pac-button--secondary pac-button--sm"
-                        aria-label={"Acompanhar demanda "}
+                        aria-label={`Acompanhar demanda ${demanda.id}`}
                       >
                         Acompanhar
                         <i className="bi bi-chevron-right" aria-hidden="true" />
