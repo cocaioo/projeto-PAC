@@ -112,6 +112,20 @@ cd frontend && npm test
 
 ---
 
+## 🧹 Apagar o Admin Master (Para revalidação)
+
+Caso precise revalidar e criar o Admin Master novamente, você pode apagar apenas os usuários do tipo dmin_master sem limpar o banco inteiro. Na pasta ackend/:
+
+**No Banco Principal (PostgreSQL)**:
+* **PowerShell**: python manage.py shell -c "from apps.usuarios.models import Usuario; Usuario.objects.filter(perfil='admin_master').delete()"
+* **Git Bash / macOS / Linux**: python manage.py shell -c 'from apps.usuarios.models import Usuario; Usuario.objects.filter(perfil="admin_master").delete()'
+
+**No Banco E2E (e2e.sqlite3)**:
+* **PowerShell**: python -c "import sqlite3; conn = sqlite3.connect('e2e.sqlite3'); conn.execute('DELETE FROM usuarios_usuario WHERE perfil=''admin_master'''); conn.commit()"
+* **Git Bash / macOS / Linux**: python -c 'import sqlite3; conn = sqlite3.connect("e2e.sqlite3"); conn.execute("DELETE FROM usuarios_usuario WHERE perfil=\"admin_master\""); conn.commit()'
+
+---
+
 ## 👥 Autoria e Desenvolvimento
 
 * **Autor:** Caio Victor Nascimento ([@cocaioo](https://github.com/cocaioo))
