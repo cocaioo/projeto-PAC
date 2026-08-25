@@ -34,8 +34,21 @@ docker compose up -d --build
 
 ### 4. Criar Superusuário Inicial (Admin Master)
 ```bash
-docker compose exec backend python manage.py createsuperuser
+docker compose exec -it backend python manage.py bootstrap_admin_master
 ```
+O comando solicita o usuário, e-mail e uma senha temporária sem exibi-la no terminal. Essa conta será criada como **Admin Master** e deverá trocar a senha no primeiro acesso; enquanto a troca não ocorrer, a API bloqueará os demais recursos.
+
+Para uma execução automatizada no servidor, injete os valores por um secret manager apenas durante o comando e use:
+
+```bash
+docker compose exec -T \
+  -e PAC_BOOTSTRAP_ADMIN_USERNAME \
+  -e PAC_BOOTSTRAP_ADMIN_EMAIL \
+  -e PAC_BOOTSTRAP_ADMIN_PASSWORD \
+  backend python manage.py bootstrap_admin_master --no-input
+```
+
+O bootstrap é idempotente: se já existir um Admin Master ou superusuário, nenhuma senha ou dado será alterado. Não grave essas variáveis no repositório, no Dockerfile ou em um `.env` versionado.
 
 ### 5. Acessar os Serviços
 * **Aplicação Web (SPA React via Nginx):** `http://localhost` (ou porta configurada em `PORT`)
@@ -82,7 +95,7 @@ python -m venv venv
 venv\Scripts\activate       # No Linux/macOS: source venv/bin/activate
 pip install -r ../requirements.txt
 python manage.py migrate
-python manage.py createsuperuser
+python manage.py bootstrap_admin_master
 python manage.py runserver 8000
 
 # 2. Front-end (Terminal 2)

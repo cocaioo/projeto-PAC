@@ -93,6 +93,23 @@ describe("api client", () => {
     expect(JSON.parse(options.body)).toEqual({ username: "ana", password: "senha" });
   });
 
+  it("envia a troca obrigatoria de senha para o endpoint de autenticacao", async () => {
+    global.fetch = mockFetch(200, { precisa_trocar_senha: false });
+    const passwords = {
+      senha_atual: "senha-atual",
+      nova_senha: "senha-nova",
+      confirmacao_senha: "senha-nova",
+    };
+
+    await api.changePassword(passwords);
+
+    const [url, options] = global.fetch.mock.calls[0];
+    expect(url).toContain("/auth/change-password/");
+    expect(options.method).toBe("POST");
+    expect(options.headers["X-CSRFToken"]).toBe("tok123");
+    expect(JSON.parse(options.body)).toEqual(passwords);
+  });
+
   it("não persiste nem registra credenciais ou tokens durante o login", async () => {
     localStorage.clear();
     sessionStorage.clear();

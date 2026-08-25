@@ -24,6 +24,7 @@ urlpatterns = [
     path("auth/login/", views.login_view, name="login"),
     path("auth/logout/", views.logout_view, name="logout"),
     path("auth/me/", views.me_view, name="me"),
+    path("auth/change-password/", views.change_password_view, name="change-password"),
 
     # Solicitação de Acesso
     path("auth/solicitar-acesso/", views.SolicitarAcessoView.as_view(), name="solicitar-acesso"),

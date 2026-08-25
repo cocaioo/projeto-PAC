@@ -5,18 +5,28 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import { api } from "../api/client";
 
 vi.mock("../api/client", () => ({
-  api: { me: vi.fn(), csrf: vi.fn(), login: vi.fn(), logout: vi.fn() },
+  api: {
+    me: vi.fn(),
+    csrf: vi.fn(),
+    login: vi.fn(),
+    changePassword: vi.fn(),
+    logout: vi.fn(),
+  },
 }));
 
 function Consumer() {
-  const { user, loading, login, logout, isAdmin, isAdminMaster } = useAuth();
+  const { user, loading, login, changePassword, logout, isAdmin, isAdminMaster } = useAuth();
   if (loading) return <p>carregando</p>;
   return (
     <div>
       <span>usuario: {user ? user.username : "anonimo"}</span>
+      <span>troca obrigatoria: {user?.precisa_trocar_senha ? "sim" : "nao"}</span>
       <span>admin: {isAdmin ? "sim" : "não"}</span>
       <span>master: {isAdminMaster ? "sim" : "não"}</span>
       <button onClick={() => login("ana", "senha")}>entrar</button>
+      <button onClick={() => changePassword({ senha_atual: "atual", nova_senha: "nova" })}>
+        trocar senha
+      </button>
       <button onClick={logout}>sair</button>
     </div>
   );
@@ -69,6 +79,22 @@ describe("AuthContext", () => {
       expect(screen.getByText("usuario: ana")).toBeInTheDocument()
     );
     expect(api.csrf).toHaveBeenCalled();
+  });
+
+  it("remove a troca obrigatoria e atualiza o contexto apos alterar a senha", async () => {
+    api.me.mockResolvedValue({ username: "ana", precisa_trocar_senha: true });
+    api.changePassword.mockResolvedValue({ detail: "Senha alterada." });
+    render(
+      <AuthProvider>
+        <Consumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => expect(screen.getByText("usuario: ana")).toBeInTheDocument());
+    await testUser.click(screen.getByText("trocar senha"));
+
+    expect(api.changePassword).toHaveBeenCalledWith({ senha_atual: "atual", nova_senha: "nova" });
+    expect(screen.getByText("troca obrigatoria: nao")).toBeInTheDocument();
   });
 
   it("deriva acesso administrativo do perfil PAC, não de is_staff", async () => {

@@ -105,6 +105,23 @@ describe("AppRoutes", () => {
     });
   });
 
+  it("redireciona usuario com troca obrigatoria para /trocar-senha", async () => {
+    renderAt("/demandas", {
+      user: { username: "ana", precisa_trocar_senha: true },
+      loading: false,
+      isAdmin: false,
+      isAdminMaster: false,
+    });
+
+    expect(await screen.findByRole("heading", { name: /troque sua senha/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /nova demanda/i })).not.toBeInTheDocument();
+  });
+
+  it("exige autenticacao na rota de troca de senha", () => {
+    renderAt("/trocar-senha", { user: null, loading: false, isAdmin: false, isAdminMaster: false });
+    expect(screen.getByLabelText(/e-mail ou/i)).toBeInTheDocument();
+  });
+
   it("bloqueia /gestao/usuarios para admin comum", () => {
     renderAt("/gestao/usuarios", {
       user: { username: "admin", perfil: "admin" },
