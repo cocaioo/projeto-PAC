@@ -166,8 +166,12 @@ export default function Catalogo() {
         eyebrow="Planejamento e contratações"
         title="Catálogo de itens"
         description="Consulte materiais e serviços por nome, código ou grupo de contratação."
-        actions={isAdmin && gruposGerenciaveis.length > 0 && (
-          <Button onClick={abrirCadastro}>
+        actions={isAdmin && (
+          <Button
+            onClick={abrirCadastro}
+            disabled={gruposGerenciaveis.length === 0}
+            title={gruposGerenciaveis.length === 0 ? "É necessário ter pelo menos um grupo de contratação cadastrado para criar itens." : ""}
+          >
             <i className="bi bi-plus-lg" aria-hidden="true" />Cadastrar item
           </Button>
         )}
