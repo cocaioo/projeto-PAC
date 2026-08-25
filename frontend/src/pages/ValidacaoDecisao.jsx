@@ -22,12 +22,13 @@ function atualizarStatus(itens, itemId, status, comentario = "") {
 
 export default function ValidacaoDecisao() {
   const { demandaId } = useParams();
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const [itens, setItens] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
   const [erroDecisao, setErroDecisao] = useState(null);
   const [mensagem, setMensagem] = useState("");
+  const [avisoSincronizacao, setAvisoSincronizacao] = useState("");
   const [tentativa, setTentativa] = useState(0);
   const [itemParaValidar, setItemParaValidar] = useState(null);
   const [itemParaDevolver, setItemParaDevolver] = useState(null);
@@ -36,6 +37,9 @@ export default function ValidacaoDecisao() {
   const [decidindoId, setDecidindoId] = useState(null);
 
   useEffect(() => {
+    // Bug #5 (race condition): aguardar o AuthContext terminar de carregar antes de agir.
+    if (authLoading) return undefined;
+
     if (!isAdmin) {
       setCarregando(false);
       return undefined;
@@ -44,8 +48,9 @@ export default function ValidacaoDecisao() {
     let ativo = true;
     setCarregando(true);
     setErro(null);
+    // Bug #1: filtrar por demandaId para não depender de paginação do backend.
     api
-      .listPendentes()
+      .listPendentes({ demanda: demandaId })
       .then((data) => {
         if (ativo) setItens(resultadosDaApi(data));
       })
@@ -59,7 +64,7 @@ export default function ValidacaoDecisao() {
     return () => {
       ativo = false;
     };
-  }, [isAdmin, tentativa]);
+  }, [authLoading, isAdmin, demandaId, tentativa]);
 
   const demanda = useMemo(
     () => agruparItensPorDemanda(itens).find((item) => String(item.id) === String(demandaId)),
@@ -86,6 +91,7 @@ export default function ValidacaoDecisao() {
     setDecidindoId(item.id);
     setErroDecisao(null);
     setMensagem("");
+    setAvisoSincronizacao("");
     try {
       await api.decidirValidacao({
         item_demanda: item.id,
@@ -93,12 +99,21 @@ export default function ValidacaoDecisao() {
         comentario: justificativa,
       });
       const devolvido = acao === "devolvido";
-      setItens((atuais) => atualizarStatus(
-        atuais,
-        item.id,
-        devolvido ? "devolvida" : "validada",
-        justificativa
-      ));
+      const atualizacaoLocal = (atuais) => atualizarStatus(
+          atuais,
+          item.id,
+          devolvido ? "devolvida" : "validada",
+          justificativa
+        );
+      try {
+        const pendentesAtualizados = await api.listPendentes({ demanda: demandaId });
+        setItens(resultadosDaApi(pendentesAtualizados).filter(
+          (itemPendente) => itemPendente.id !== item.id
+        ));
+      } catch {
+        setItens(atualizacaoLocal);
+        setAvisoSincronizacao("A decisão foi registrada, mas não foi possível atualizar a fila. Use o botão de voltar e atualize as pendências.");
+      }
       setMensagem(
         devolvido
           ? `O item ${item.nome} foi devolvido ao solicitante.`
@@ -123,6 +138,8 @@ export default function ValidacaoDecisao() {
     }
     decidir(itemParaDevolver, "devolvido", justificativa);
   }
+
+  if (authLoading) return <LoadingState label="Verificando permissoes..." />;
 
   if (!isAdmin) {
     return (
@@ -153,6 +170,16 @@ export default function ValidacaoDecisao() {
     return (
       <div>
         <PageHeader eyebrow="Administração" title="Análise da demanda" />
+        {mensagem && (
+          <InlineMessage variant="success" title="Decisão registrada" onDismiss={() => setMensagem("")}>
+            {mensagem}
+          </InlineMessage>
+        )}
+        {avisoSincronizacao && (
+          <InlineMessage variant="warning" title="Atualização pendente" onDismiss={() => setAvisoSincronizacao("")}>
+            {avisoSincronizacao}
+          </InlineMessage>
+        )}
         <EmptyState
           icon="bi-folder-x"
           title="Demanda sem itens pendentes"
@@ -184,6 +211,11 @@ export default function ValidacaoDecisao() {
       {mensagem && (
         <InlineMessage variant="success" title="Decisão registrada" onDismiss={() => setMensagem("")}>
           {mensagem}
+        </InlineMessage>
+      )}
+      {avisoSincronizacao && (
+        <InlineMessage variant="warning" title="Atualização pendente" onDismiss={() => setAvisoSincronizacao("")}>
+          {avisoSincronizacao}
         </InlineMessage>
       )}
 

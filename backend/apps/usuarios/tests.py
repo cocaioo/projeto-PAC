@@ -6,6 +6,7 @@ import json
 from io import BytesIO
 from unittest import mock
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.contrib.auth import authenticate, get_user_model
 
 from apps.unidades.models import Unidade
@@ -190,4 +191,81 @@ class SipacAuthBackendTests(TestCase):
         mock_auth.return_value = None
 
         user = authenticate(username="inexistente", password="qualquer_senha")
+        self.assertIsNone(user)
+
+
+class UsuariosLegacyAccessControlTests(TestCase):
+    def setUp(self):
+        self.unidade = Unidade.objects.create(
+            codigo="STI01",
+            nome="Superintendencia de TI",
+            sigla="STI",
+        )
+        self.admin_master = Usuario.objects.create_user(
+            username="master",
+            password="senha-segura",
+            email="master@ufpi.edu.br",
+            perfil="admin_master",
+            unidade=self.unidade,
+        )
+        self.usuario_comum = Usuario.objects.create_user(
+            username="comum",
+            password="senha-segura",
+            email="comum@ufpi.edu.br",
+            perfil="usuario",
+            unidade=self.unidade,
+        )
+
+    def test_lista_legada_exige_admin_master(self):
+        self.client.force_login(self.usuario_comum)
+        resposta = self.client.get(reverse("usuarios:lista"))
+
+        self.assertEqual(resposta.status_code, 403)
+
+    def test_ativacao_legada_exige_post_e_admin_master(self):
+        self.client.force_login(self.admin_master)
+        get_resposta = self.client.get(
+            reverse("usuarios:ativar", kwargs={"pk": self.usuario_comum.pk})
+        )
+        self.assertEqual(get_resposta.status_code, 405)
+
+        self.client.force_login(self.usuario_comum)
+        post_resposta = self.client.post(
+            reverse("usuarios:desativar", kwargs={"pk": self.admin_master.pk})
+        )
+        self.assertEqual(post_resposta.status_code, 403)
+
+
+class AutenticacaoEmailOuUsernameTests(TestCase):
+    def setUp(self):
+        self.unidade = Unidade.objects.create(
+            codigo="DA01",
+            nome="Diretoria de Administracao",
+            sigla="DA",
+        )
+        self.usuario = Usuario.objects.create_user(
+            username="joao.silva",
+            email="joao.silva@ufpi.edu.br",
+            password="SenhaForte123!",
+            first_name="Joao Silva",
+            unidade=self.unidade,
+        )
+
+    def test_autentica_com_sucesso_usando_email(self):
+        user = authenticate(username="joao.silva@ufpi.edu.br", password="SenhaForte123!")
+        self.assertIsNotNone(user)
+        self.assertEqual(user.pk, self.usuario.pk)
+
+    def test_autentica_com_sucesso_usando_username(self):
+        user = authenticate(username="joao.silva", password="SenhaForte123!")
+        self.assertIsNotNone(user)
+        self.assertEqual(user.pk, self.usuario.pk)
+
+    def test_autentica_com_email_case_insensitive(self):
+        user = authenticate(username="JOAO.SILVA@UFPI.EDU.BR", password="SenhaForte123!")
+        self.assertIsNotNone(user)
+        self.assertEqual(user.pk, self.usuario.pk)
+
+    def test_rejeita_senha_incorreta(self):
+        user = authenticate(username="joao.silva@ufpi.edu.br", password="SenhaErrada!")
         self.assertIsNone(user)

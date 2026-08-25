@@ -225,7 +225,8 @@ export default function DemandaDetail() {
 
   if (!demanda) return null;
 
-  const isDraft = canEditDemand(demanda);
+  const isOwner = demanda.pode_editar === true;
+  const isDraft = isOwner && canEditDemand(demanda);
   const nextAction = getDemandNextAction(demanda);
   const checklistItems = [
     { label: "Adicione ao menos um item", done: itens.length > 0 },
@@ -303,7 +304,7 @@ export default function DemandaDetail() {
       <Card title="Dados da demanda" className="mb-4">
         <dl className="row mb-0">
           <dt className="col-sm-3">Unidade</dt>
-          <dd className="col-sm-9">{demanda.unidade_sigla || "—"}</dd>
+          <dd className="col-sm-9">{demanda.unidade_nome || demanda.unidade_sigla || "—"}</dd>
           <dt className="col-sm-3">Ano de referência</dt>
           <dd className="col-sm-9">{demanda.ano_referencia}</dd>
           <dt className="col-sm-3">Responsável</dt>
@@ -369,8 +370,8 @@ export default function DemandaDetail() {
                 const returnReason = getReturnReason(item);
                 const returnResponsible = getResponsibleName(item.ultima_devolucao?.responsavel);
                 const dfdNumber = getDfdNumber(item);
-                const editable = canEditItem(demanda, item);
-                const resubmittable = canResubmitItem(demanda, item);
+                const editable = isOwner && canEditItem(demanda, item);
+                const resubmittable = isOwner && canResubmitItem(demanda, item);
                 const itemNextAction = getItemNextAction(item, demanda);
 
                 return (

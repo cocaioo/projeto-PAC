@@ -21,9 +21,10 @@ describe("componentes administrativos base", () => {
   });
 
   it("fecha Modal com Escape", async () => {
+    const user = userEvent.setup();
     const onClose = vi.fn();
     render(<Modal open title="Confirmar" onClose={onClose}>Mensagem</Modal>);
-    await userEvent.keyboard("{Escape}");
+    await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledOnce();
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
   });

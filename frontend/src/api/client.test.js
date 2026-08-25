@@ -5,7 +5,7 @@ function mockFetch(status, data, ok = status < 400) {
   return vi.fn().mockResolvedValue({
     ok,
     status,
-    json: async () => data,
+    text: async () => (data === null ? "" : JSON.stringify(data)),
   });
 }
 
@@ -47,6 +47,37 @@ describe("api client", () => {
 
     expect(error.message).toBe("Você não tem permissão para realizar esta ação.");
     expect(error.message).not.toMatch(/grupo 42|unidade do operador/i);
+  });
+
+  it("usa texto simples quando a API nao devolve JSON", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => "Dados invalidos.",
+    });
+
+    await expect(api.get("/x/")).rejects.toMatchObject({
+      message: "Dados invalidos.",
+      status: 400,
+    });
+  });
+
+  it("mantem mensagem generica para HTML de infraestrutura", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => "<html><body>Bad Gateway</body></html>",
+    });
+
+    await expect(api.get("/x/")).rejects.toMatchObject({
+      message: "O servidor nao respondeu. Tente novamente em instantes.",
+      status: 502,
+    });
+  });
+
+  it("ignora HTML quando ele vem dentro do campo detail", () => {
+    const error = parseApiError(502, { detail: "<html><body>Bad Gateway</body></html>" });
+    expect(error.message).toBe("O servidor nao respondeu. Tente novamente em instantes.");
   });
 
   it("retorna null em respostas 204", async () => {
@@ -168,4 +199,91 @@ describe("api client", () => {
     expect(options.method).toBe("DELETE");
     expect(result).toBeNull();
   });
+
+  it("extrai mensagem do campo 'error' e limpa formatação de ValidationError do Django", () => {
+    const error = parseApiError(400, {
+      error: "['Já existe um usuário com este e-mail.']",
+    });
+    expect(error.message).toBe("Já existe um usuário com este e-mail.");
+    expect(error.fieldErrors).toEqual({});
+  });
+
+  it("extrai mensagem de non_field_errors", () => {
+    const error = parseApiError(400, {
+      non_field_errors: ["As credenciais informadas não são válidas."],
+    });
+    expect(error.message).toBe("As credenciais informadas não são válidas.");
+    expect(error.fieldErrors).toEqual({});
+  });
+
+  it("preserva mensagem específica em erro 401 de login", () => {
+    const error = parseApiError(401, {
+      detail: "Credenciais inválidas.",
+    });
+    expect(error.message).toBe("Credenciais inválidas.");
+  });
+
+  it("utiliza mensagem padrão de sessão expirada em 401 sem detalhe", () => {
+    const error = parseApiError(401, {});
+    expect(error.message).toBe("Sua sessão expirou. Entre novamente.");
+  });
+
+  it("executa métodos de API para gestão de contas e solicitação de acesso", async () => {
+    global.fetch = mockFetch(201, { message: "ok" });
+
+    await api.solicitarAcesso({ email: "teste@ufpi.edu.br" });
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/auth/solicitar-acesso/"),
+      expect.objectContaining({ method: "POST" })
+    );
+
+    global.fetch = mockFetch(200, []);
+    await api.listSolicitacoes({ status: "pendente" });
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/solicitacoes/?status=pendente"),
+      expect.objectContaining({ method: "GET" })
+    );
+
+    global.fetch = mockFetch(200, { message: "ok" });
+    await api.aprovarSolicitacao(5, { perfil: "admin", grupos_administrados: [2] });
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/solicitacoes/5/aprovar/"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ perfil: "admin", grupos_administrados: [2] }),
+      })
+    );
+
+    await api.rejeitarSolicitacao(5, { motivo_rejeicao: "Motivo" });
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/solicitacoes/5/rejeitar/"),
+      expect.objectContaining({ method: "POST" })
+    );
+
+    await api.listUsuariosAdmin({ perfil: "admin" });
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/usuarios/?perfil=admin"),
+      expect.objectContaining({ method: "GET" })
+    );
+
+    await api.createUsuarioAdmin({ email: "novo@ufpi.edu.br" });
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/usuarios/"),
+      expect.objectContaining({ method: "POST" })
+    );
+
+    await api.updateUsuarioStatus(12, { is_active: false });
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/usuarios/12/status/"),
+      expect.objectContaining({ method: "PATCH" })
+    );
+
+    global.fetch = mockFetch(200, { message: "Usuário excluído com sucesso." });
+    await api.deleteUsuarioAdmin(12);
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("/admin/usuarios/12/"),
+      expect.objectContaining({ method: "DELETE" })
+    );
+  });
 });
+

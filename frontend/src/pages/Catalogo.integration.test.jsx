@@ -6,7 +6,11 @@ import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../test-utils";
 import Catalogo from "./Catalogo";
 
-const authState = vi.hoisted(() => ({ isAdmin: false }));
+const authState = vi.hoisted(() => ({
+  isAdmin: false,
+  isAdminMaster: false,
+  user: null,
+}));
 vi.mock("../auth/AuthContext", () => ({ useAuth: () => authState }));
 
 const baseItem = {
@@ -50,12 +54,20 @@ const server = setupServer(
     const updated = { ...catalogItems.find((item) => item.id === id), ativo: false };
     catalogItems = catalogItems.map((item) => item.id === id ? updated : item);
     return HttpResponse.json(updated);
+  }),
+  http.post("*/api/catalogo/:id/ativar/", ({ params }) => {
+    const id = Number(params.id);
+    const updated = { ...catalogItems.find((item) => item.id === id), ativo: true };
+    catalogItems = catalogItems.map((item) => item.id === id ? updated : item);
+    return HttpResponse.json(updated);
   })
 );
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   authState.isAdmin = false;
+  authState.isAdminMaster = false;
+  authState.user = null;
   catalogItems = [baseItem];
   requests.length = 0;
   server.resetHandlers();
@@ -85,8 +97,10 @@ describe("Catálogo integrado ao cliente HTTP", () => {
     expect(requests.filter((url) => url.searchParams.has("q"))).toHaveLength(1);
   });
 
+  // Teste pesado: cria → edita → desativa via MSW. Timeout explícito de 15s.
   it("ADMIN cria, edita e desativa um item pela API", async () => {
     authState.isAdmin = true;
+    authState.user = { grupos_administrados: [{ id: 2, nome: "TIC" }] };
     const user = userEvent.setup();
     renderWithRouter(<Catalogo />);
     await screen.findByText("Mouse sem fio");
@@ -112,6 +126,18 @@ describe("Catálogo integrado ao cliente HTTP", () => {
     await user.click(within(updatedRow).getByRole("button", { name: /desativar/i }));
     await user.click(screen.getByRole("button", { name: /confirmar desativação/i }));
     await waitFor(() => expect(within(updatedRow).getByText("Inativo")).toBeInTheDocument());
+  }, 15000);
+
+  it("mantém admin fora do escopo apenas com leitura", async () => {
+    authState.isAdmin = true;
+    authState.user = { grupos_administrados: [{ id: 99, nome: "Outro grupo" }] };
+
+    renderWithRouter(<Catalogo />);
+
+    expect(await screen.findByText("Mouse sem fio")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cadastrar item/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /editar/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/escopo de leitura/i)).toBeInTheDocument();
   });
 
   it("exibe nome malicioso recebido da API somente como texto", async () => {

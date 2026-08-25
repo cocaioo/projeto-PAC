@@ -16,21 +16,32 @@ vi.mock("../api/client", () => ({
   },
 }));
 
-async function preencherObrigatorios() {
-  await userEvent.type(screen.getByLabelText(/^nome$/i), "Notebook");
-  await userEvent.type(screen.getByLabelText(/descrição/i), "Notebook i5");
-  await userEvent.type(screen.getByLabelText(/unidade de medida/i), "unidade");
-  await userEvent.clear(screen.getByLabelText(/quantidade/i));
-  await userEvent.type(screen.getByLabelText(/quantidade/i), "2");
-  await userEvent.type(screen.getByLabelText(/valor estimado/i), "1500");
-  await userEvent.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
-  await userEvent.type(screen.getByLabelText(/indicação orçamentária/i), "Orc 1");
-  await userEvent.type(screen.getByLabelText(/justificativa da prioridade/i), "Alta");
-  await userEvent.type(screen.getByLabelText(/justificativa da necessidade/i), "Uso");
+// Preenche os campos obrigatórios do formulário de novo item.
+// Aceita uma instância de userEvent.setup() para garantir o isolamento correto
+// de estado de teclado entre testes — sem isso, userEvent.type() pode compor
+// caracteres fora de ordem em JSDOM (ex.: "aNçoãtoeboo" em vez de "Notebook").
+async function preencherObrigatorios(user) {
+  if (!user || user === userEvent) {
+    user = userEvent.setup();
+  }
+  await user.type(screen.getByLabelText(/^nome$/i), "Notebook");
+  await user.type(screen.getByLabelText(/descrição/i), "Notebook i5");
+  await user.type(screen.getByLabelText(/unidade de medida/i), "unidade");
+  await user.clear(screen.getByLabelText(/quantidade/i));
+  await user.type(screen.getByLabelText(/quantidade/i), "2");
+  await user.type(screen.getByLabelText(/valor estimado/i), "1500");
+  await user.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
+  await user.type(screen.getByLabelText(/indicação orçamentária/i), "Orc 1");
+  await user.type(screen.getByLabelText(/justificativa da prioridade/i), "Alta");
+  await user.type(screen.getByLabelText(/justificativa da necessidade/i), "Uso");
 }
 
+
 describe("ItemForm", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     vi.clearAllMocks();
     api.getDemanda.mockResolvedValue({ itens: [] });
   });
@@ -61,7 +72,7 @@ describe("ItemForm", () => {
       route: "/demandas/7/itens/novo",
       path: "/demandas/:id/itens/novo",
     });
-    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    await testUser.click(screen.getByRole("button", { name: /adicionar item/i }));
     expect(api.addItem).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/^nome$/i)).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText(/informe o nome do item/i)).toHaveAttribute("role", "alert");
@@ -83,14 +94,15 @@ describe("ItemForm", () => {
       path: "/demandas/:id/itens/novo",
     });
     await waitFor(() => expect(api.getDemanda).toHaveBeenCalledWith("7"));
-    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
-    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
-    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+    await testUser.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await testUser.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await testUser.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
     expect(screen.getByText(/já foi adicionado à demanda/i)).toBeInTheDocument();
     expect(api.addItem).not.toHaveBeenCalled();
   });
 
   it("mostra erro estruturado do backend no campo correto", async () => {
+    const user = userEvent.setup();
     api.addItem.mockRejectedValue({
       message: "Revise os dados informados.",
       fieldErrors: { quantidade: ["Quantidade indisponível para este ciclo."] },
@@ -99,13 +111,14 @@ describe("ItemForm", () => {
       route: "/demandas/7/itens/novo",
       path: "/demandas/:id/itens/novo",
     });
-    await preencherObrigatorios();
-    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    await preencherObrigatorios(user);
+    await user.click(screen.getByRole("button", { name: /adicionar item/i }));
     expect(await screen.findByText(/quantidade indisponível/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/quantidade/i)).toHaveAttribute("aria-describedby", "quantidade-error");
   });
 
   it("seleciona item do catálogo, preenche dados e calcula o total visual", async () => {
+    const user = userEvent.setup();
     api.listCatalogo.mockResolvedValue({
       results: [{
         id: 5,
@@ -125,23 +138,23 @@ describe("ItemForm", () => {
       extraRoutes: [{ path: "/demandas/:id", element: <p>detalhe demanda</p> }],
     });
 
-    await userEvent.click(screen.getByLabelText(/selecionar do catálogo/i));
-    await userEvent.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
-    await userEvent.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
+    await user.click(screen.getByLabelText(/selecionar do catálogo/i));
+    await user.type(screen.getByLabelText(/pesquisar item no catálogo/i), "note");
+    await user.click(await screen.findByRole("option", { name: /notebook institucional/i }, { timeout: 1500 }));
 
     expect(screen.getByLabelText(/^nome$/i)).toHaveValue("Notebook institucional");
     expect(screen.getByLabelText(/valor estimado unitário/i)).toHaveValue(4200.5);
     expect(screen.getByText(/grupo de contratação:/i)).toHaveTextContent("TIC");
 
-    await userEvent.clear(screen.getByLabelText(/quantidade/i));
-    await userEvent.type(screen.getByLabelText(/quantidade/i), "2");
+    await user.clear(screen.getByLabelText(/quantidade/i));
+    await user.type(screen.getByLabelText(/quantidade/i), "2");
     expect(screen.getByText(/8\.401,00/)).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
-    await userEvent.type(screen.getByLabelText(/indicação orçamentária/i), "Fonte 1000");
-    await userEvent.type(screen.getByLabelText(/justificativa da prioridade/i), "Planejamento");
-    await userEvent.type(screen.getByLabelText(/justificativa da necessidade/i), "Renovação");
-    await userEvent.click(screen.getByRole("button", { name: /adicionar item/i }));
+    await user.type(screen.getByLabelText(/data prevista/i), "2027-01-01");
+    await user.type(screen.getByLabelText(/indicação orçamentária/i), "Fonte 1000");
+    await user.type(screen.getByLabelText(/justificativa da prioridade/i), "Planejamento");
+    await user.type(screen.getByLabelText(/justificativa da necessidade/i), "Renovação");
+    await user.click(screen.getByRole("button", { name: /adicionar item/i }));
 
     await waitFor(() => expect(api.addItem).toHaveBeenCalledTimes(1));
     expect(api.addItem.mock.calls[0][1]).toMatchObject({
@@ -153,6 +166,7 @@ describe("ItemForm", () => {
   });
 
   it("adiciona item à demanda e navega de volta ao detalhe", async () => {
+    const user = userEvent.setup();
     api.addItem.mockResolvedValue({ id: 10 });
     renderWithRouter(<ItemForm />, {
       route: "/demandas/7/itens/novo",
@@ -160,8 +174,8 @@ describe("ItemForm", () => {
       extraRoutes: [{ path: "/demandas/:id", element: <p>detalhe demanda</p> }],
     });
 
-    await preencherObrigatorios();
-    await userEvent.click(
+    await preencherObrigatorios(user);
+    await user.click(
       screen.getByRole("button", { name: /adicionar item/i })
     );
 
@@ -179,7 +193,7 @@ describe("ItemForm", () => {
       path: "/demandas/:id/itens/novo",
     });
     await preencherObrigatorios();
-    await userEvent.click(
+    await testUser.click(
       screen.getByRole("button", { name: /adicionar item/i })
     );
     expect(
@@ -218,10 +232,10 @@ describe("ItemForm", () => {
     expect(screen.getByLabelText(/^nome$/i)).toHaveValue("Impressora Laser");
     expect(screen.getByLabelText(/observações do solicitante/i)).toHaveValue("Marca especificada");
 
-    await userEvent.clear(screen.getByLabelText(/observações do solicitante/i));
-    await userEvent.type(screen.getByLabelText(/observações do solicitante/i), "Observação atualizada");
+    await testUser.clear(screen.getByLabelText(/observações do solicitante/i));
+    await testUser.type(screen.getByLabelText(/observações do solicitante/i), "Observação atualizada");
 
-    await userEvent.click(screen.getByRole("button", { name: /salvar alterações/i }));
+    await testUser.click(screen.getByRole("button", { name: /salvar alterações/i }));
 
     await waitFor(() => expect(api.updateItem).toHaveBeenCalledTimes(1));
     const [itemId, payload] = api.updateItem.mock.calls[0];
@@ -353,16 +367,16 @@ describe("ItemForm", () => {
     const reenviar = screen.getByRole("button", { name: /reenviar/i });
     expect(reenviar).not.toBeDisabled();
 
-    await userEvent.type(screen.getByLabelText(/observa/i), "Ajustado");
+    await testUser.type(screen.getByLabelText(/observa/i), "Ajustado");
     expect(screen.getByRole("button", { name: /reenviar/i })).toBeDisabled();
     expect(screen.getByText(/salve as altera/i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /salvar altera/i }));
+    await testUser.click(screen.getByRole("button", { name: /salvar altera/i }));
     await waitFor(() => expect(api.updateItem).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("button", { name: /reenviar/i })).not.toBeDisabled();
 
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
-    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledWith("10"));
   });
 
@@ -393,9 +407,9 @@ describe("ItemForm", () => {
     });
 
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
-    await userEvent.clear(screen.getByLabelText(/quantidade/i));
-    await userEvent.type(screen.getByLabelText(/quantidade/i), "0");
-    await userEvent.click(screen.getByRole("button", { name: /salvar altera/i }));
+    await testUser.clear(screen.getByLabelText(/quantidade/i));
+    await testUser.type(screen.getByLabelText(/quantidade/i), "0");
+    await testUser.click(screen.getByRole("button", { name: /salvar altera/i }));
 
     expect(await screen.findByText(/quantidade deve ser maior que zero/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reenviar/i })).toBeDisabled();
@@ -492,9 +506,9 @@ describe("ItemForm", () => {
     });
 
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     expect(api.reenviarItem).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
+    await testUser.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
     await waitFor(() => expect(api.reenviarItem).toHaveBeenCalledTimes(1));
     expect(api.reenviarItem).toHaveBeenCalledWith("10");
     expect(api.reenviarItem.mock.calls[0]).toHaveLength(1);
@@ -532,9 +546,9 @@ describe("ItemForm", () => {
     expect(await screen.findByText("Editar item")).toBeInTheDocument();
     const salvar = screen.getByRole("button", { name: /salvar altera/i });
     const reenviar = screen.getByRole("button", { name: /reenviar/i });
-    await userEvent.click(reenviar);
+    await testUser.click(reenviar);
     const confirmar = screen.getByRole("button", { name: /confirmar reenvio/i });
-    await userEvent.dblClick(confirmar);
+    await testUser.dblClick(confirmar);
     expect(reenviar).toBeDisabled();
     expect(confirmar).toBeDisabled();
     expect(salvar).toBeDisabled();

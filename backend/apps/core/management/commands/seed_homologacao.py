@@ -131,6 +131,7 @@ class Command(BaseCommand):
             unidades = self._upsert_unidades()
             usuarios = self._upsert_usuarios(unidades, senha, specs)
             grupos = self._upsert_grupos(unidades)
+            self._associar_admins_a_grupos(usuarios, grupos)
             catalogo = self._upsert_catalogo(grupos)
             ciclo = self._get_or_create_cycle()
             demandas = self._upsert_demandas(
@@ -344,6 +345,12 @@ class Command(BaseCommand):
                 grupo.save(update_fields=[*defaults, "atualizado_em"])
             grupos[key] = grupo
         return grupos
+
+    @staticmethod
+    def _associar_admins_a_grupos(usuarios, grupos):
+        """Torna explícito o escopo dos admins da massa de homologação."""
+        for group_key, username in ADMIN_BY_GROUP.items():
+            usuarios[username].grupos_administrados.set([grupos[group_key]])
 
     def _upsert_catalogo(self, grupos):
         catalogo = {}

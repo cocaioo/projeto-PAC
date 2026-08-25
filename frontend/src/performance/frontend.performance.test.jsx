@@ -135,7 +135,7 @@ describe("orçamento de renderização do frontend", () => {
 
     expect(await screen.findByRole("heading", { name: "Demanda #1" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Demanda #50" })).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /Abrir demanda \d+/i })).toHaveLength(50);
+    expect(screen.getAllByRole("link", { name: /Analisar itens da demanda \d+/i })).toHaveLength(50);
     expect(screen.getAllByText("5 itens pendentes")).toHaveLength(50);
     expect(api.listPendentes).toHaveBeenCalledTimes(1);
     expect(api.listPendentes).toHaveBeenCalledWith({

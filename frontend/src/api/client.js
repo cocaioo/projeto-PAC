@@ -9,10 +9,13 @@ const DEFAULT_MESSAGES = {
   404: "O conteúdo solicitado não foi encontrado.",
   409: "A operação não pode ser concluída no estado atual.",
   500: "Ocorreu um erro interno. Tente novamente em instantes.",
+  502: "O servidor nao respondeu. Tente novamente em instantes.",
+  503: "O servidor nao respondeu. Tente novamente em instantes.",
+  504: "O servidor nao respondeu. Tente novamente em instantes.",
 };
 
 const TECHNICAL_DETAIL = /(traceback|stack\s*trace|exception|file\s+".+",\s+line|\bat\s+\w+[.(])/iu;
-const META_ERROR_KEYS = new Set(["detail", "message", "code", "stack", "traceback"]);
+const META_ERROR_KEYS = new Set(["detail", "message", "error", "non_field_errors", "code", "stack", "traceback"]);
 
 export class ApiError extends Error {
   constructor(message, status = 0, data = null, options = {}) {
@@ -32,9 +35,21 @@ function getCookie(name) {
   return match ? decodeURIComponent(match[2]) : null;
 }
 
+function cleanMessageString(str) {
+  if (typeof str !== "string") return "";
+  let s = str.trim();
+  if (/^\[\s*['"].*['"]\s*\]$/s.test(s)) {
+    s = s.slice(1, -1).trim();
+    if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) {
+      s = s.slice(1, -1).trim();
+    }
+  }
+  return s;
+}
+
 function toMessages(value) {
   if (Array.isArray(value)) return value.flatMap(toMessages);
-  if (typeof value === "string" || typeof value === "number") return [String(value)];
+  if (typeof value === "string" || typeof value === "number") return [cleanMessageString(String(value))].filter(Boolean);
   if (value && typeof value === "object") return Object.values(value).flatMap(toMessages);
   return [];
 }
@@ -50,9 +65,20 @@ export function extractFieldErrors(data) {
 }
 
 function safeServerMessage(data) {
-  const candidate = data && (data.detail || data.message);
-  if (typeof candidate !== "string" || TECHNICAL_DETAIL.test(candidate)) return "";
-  return candidate.trim();
+  if (typeof data === "string") {
+    const cleaned = cleanMessageString(data);
+    if (!cleaned || /<\/?[a-z][^>]*>/iu.test(cleaned) || TECHNICAL_DETAIL.test(cleaned)) return "";
+    return cleaned;
+  }
+  if (!data || typeof data !== "object") return "";
+  let candidate = data.detail || data.message || data.error;
+  if (!candidate && Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
+    candidate = data.non_field_errors[0];
+  }
+  if (typeof candidate !== "string") return "";
+  const cleaned = cleanMessageString(candidate);
+  if (!cleaned || /<\/?[a-z][^>]*>/iu.test(cleaned) || TECHNICAL_DETAIL.test(cleaned)) return "";
+  return cleaned;
 }
 
 export function parseApiError(status, data) {
@@ -60,7 +86,7 @@ export function parseApiError(status, data) {
   const detail = safeServerMessage(data);
   let message = DEFAULT_MESSAGES[status] || "Não foi possível concluir a solicitação.";
 
-  if (status < 500 && status !== 401 && status !== 403 && detail) {
+  if (status < 500 && status !== 403 && detail) {
     message = detail;
   } else if (status === 400 && Object.keys(fieldErrors).length > 0) {
     message = DEFAULT_MESSAGES[400];
@@ -123,10 +149,12 @@ export async function request(
   if (response.status === 204) return null;
 
   let data = null;
+  let responseText = "";
   try {
-    data = await response.json();
+    responseText = await response.text();
+    data = responseText ? JSON.parse(responseText) : null;
   } catch {
-    data = null;
+    data = responseText;
   }
 
   if (!response.ok) throw parseApiError(response.status, data);
@@ -175,6 +203,18 @@ export const api = {
     { query, ...options }
   ),
   consolidarDfd: (body) => request("/dfds/consolidar/", { method: "POST", body }),
+
+  solicitarAcesso: (body) => request("/auth/solicitar-acesso/", { method: "POST", body }),
+  listSolicitacoes: (query) => request("/admin/solicitacoes/", { query }),
+  aprovarSolicitacao: (id, body) => request(
+    `/admin/solicitacoes/${id}/aprovar/`,
+    { method: "POST", ...(body === undefined ? {} : { body }) }
+  ),
+  rejeitarSolicitacao: (id, body) => request(`/admin/solicitacoes/${id}/rejeitar/`, { method: "POST", body }),
+  listUsuariosAdmin: (query) => request("/admin/usuarios/", { query }),
+  createUsuarioAdmin: (body) => request("/admin/usuarios/", { method: "POST", body }),
+  updateUsuarioStatus: (id, body) => request(`/admin/usuarios/${id}/status/`, { method: "PATCH", body }),
+  deleteUsuarioAdmin: (id) => request(`/admin/usuarios/${id}/`, { method: "DELETE" }),
 
   dashboardStats: () => request("/dashboard/stats/"),
 };

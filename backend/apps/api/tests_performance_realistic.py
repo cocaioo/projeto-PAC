@@ -67,6 +67,7 @@ class LeiturasComMassaRealistaPerformanceTests(APITestCase):
             )
             for indice in range(1, 4)
         ]
+        cls.admin.grupos_administrados.add(*cls.grupos)
         cls.catalogo = []
         for indice in range(15):
             grupo = cls.grupos[indice // 5]
