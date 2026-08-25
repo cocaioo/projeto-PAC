@@ -36,7 +36,7 @@ docker compose up -d --build
 ```bash
 docker compose exec -it backend python manage.py bootstrap_admin_master
 ```
-O comando solicita o usuário, e-mail e uma senha temporária sem exibi-la no terminal. Essa conta será criada como **Admin Master** e deverá trocar a senha no primeiro acesso; enquanto a troca não ocorrer, a API bloqueará os demais recursos.
+O comando solicita apenas o usuário e e-mail no terminal. A senha temporária padrão gerada será **`PacBootstrap!2026`** (caso não tenha configurado a variável de ambiente). Essa conta será criada como **Admin Master** e exigirá a troca da senha no primeiro acesso; enquanto a troca não ocorrer, a API bloqueará os demais recursos.
 
 Para uma execução automatizada no servidor, injete os valores por um secret manager apenas durante o comando e use:
 
