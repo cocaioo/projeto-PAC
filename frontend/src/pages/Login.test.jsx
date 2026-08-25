@@ -17,8 +17,26 @@ describe("Login", () => {
   it("renderiza o formulário de login", () => {
     renderWithRouter(<Login />);
     expect(screen.getByLabelText(/usuário/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/senha/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^senha/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument();
+  });
+
+  it("permite mostrar e ocultar a senha com um controle acessível", async () => {
+    renderWithRouter(<Login />);
+    const password = screen.getByLabelText(/^senha/i);
+    const toggle = screen.getByRole("button", { name: "Mostrar senha" });
+
+    expect(password).toHaveAttribute("type", "password");
+    expect(toggle).toHaveAttribute("aria-controls", "password");
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    await testUser.click(toggle);
+    expect(password).toHaveAttribute("type", "text");
+    expect(toggle).toHaveAccessibleName("Ocultar senha");
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+    await testUser.click(toggle);
+    expect(password).toHaveAttribute("type", "password");
   });
 
   it("chama login e navega ao autenticar com sucesso", async () => {
@@ -29,7 +47,7 @@ describe("Login", () => {
       extraRoutes: [{ path: "/", element: <p>inicio</p> }],
     });
     await testUser.type(screen.getByLabelText(/usuário/i), "ana");
-    await testUser.type(screen.getByLabelText(/senha/i), "senha123");
+    await testUser.type(screen.getByLabelText(/^senha/i), "senha123");
     await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(login).toHaveBeenCalledWith("ana", "senha123");
@@ -40,7 +58,7 @@ describe("Login", () => {
     login.mockRejectedValue(new Error("Credenciais inválidas."));
     renderWithRouter(<Login />, { route: "/login", path: "/login" });
     await testUser.type(screen.getByLabelText(/usuário/i), "ana");
-    await testUser.type(screen.getByLabelText(/senha/i), "errada");
+    await testUser.type(screen.getByLabelText(/^senha/i), "errada");
     await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(
@@ -63,7 +81,7 @@ describe("Login", () => {
       extraRoutes: [{ path: "/", element: <p>inicio</p> }],
     });
     await testUser.type(screen.getByLabelText(/usuário/i), "  ana.maria@ufpi.edu.br  ");
-    await testUser.type(screen.getByLabelText(/senha/i), "senha123");
+    await testUser.type(screen.getByLabelText(/^senha/i), "senha123");
     await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(login).toHaveBeenCalledWith("ana.maria@ufpi.edu.br", "senha123");
@@ -77,7 +95,7 @@ describe("Login", () => {
 
     renderWithRouter(<Login />, { route: "/login", path: "/login" });
     await testUser.type(screen.getByLabelText(/usuário/i), "usuario@ufpi.edu.br");
-    await testUser.type(screen.getByLabelText(/senha/i), "senha");
+    await testUser.type(screen.getByLabelText(/^senha/i), "senha");
     await testUser.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(

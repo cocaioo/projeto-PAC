@@ -146,7 +146,7 @@ describe("AuthFlow Integration", () => {
     render(<AppTest initialRoute="/login" />);
 
     const emailField = screen.getByLabelText(/e-mail ou usuário/i);
-    const senhaField = screen.getByLabelText(/senha/i);
+    const senhaField = screen.getByLabelText(/^senha/i);
 
     await user.clear(emailField);
     await user.clear(senhaField);
@@ -174,7 +174,7 @@ describe("AuthFlow Integration", () => {
     render(<AppTest initialRoute="/login" />);
 
     await user.type(screen.getByLabelText(/e-mail ou usuário/i), "carlos.eduardo@ufpi.edu.br");
-    await user.type(screen.getByLabelText(/senha/i), "senha_errada");
+    await user.type(screen.getByLabelText(/^senha/i), "senha_errada");
     await user.click(screen.getByRole("button", { name: /entrar/i }));
 
     expect(await screen.findByText(/credenciais inválidas/i)).toBeInTheDocument();

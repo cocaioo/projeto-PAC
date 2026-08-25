@@ -23,6 +23,25 @@ describe("ChangePassword", () => {
     expect(screen.getByLabelText(/confirme a nova senha/i)).toBeInTheDocument();
   });
 
+  it("permite mostrar e ocultar cada campo de senha", async () => {
+    renderWithRouter(<ChangePassword />, { route: "/trocar-senha", path: "/trocar-senha" });
+
+    const passwordFields = [
+      screen.getByLabelText(/senha atual/i),
+      screen.getByLabelText(/^nova senha \*/i),
+      screen.getByLabelText(/confirme a nova senha/i),
+    ];
+    const toggles = screen.getAllByRole("button", { name: "Mostrar senha" });
+
+    expect(toggles).toHaveLength(3);
+    for (const [index, toggle] of toggles.entries()) {
+      await testUser.click(toggle);
+      expect(passwordFields[index]).toHaveAttribute("type", "text");
+      expect(toggle).toHaveAccessibleName("Ocultar senha");
+      expect(toggle).toHaveAttribute("aria-pressed", "true");
+    }
+  });
+
   it("valida confirmacao sem enviar senhas inconsistentes", async () => {
     renderWithRouter(<ChangePassword />, { route: "/trocar-senha", path: "/trocar-senha" });
 
