@@ -30,7 +30,7 @@ cp .env.example .env
 ```bash
 docker compose up -d --build
 ```
-> O Docker executará o build multi-estágio do frontend (Node -> Nginx Alpine), construirá a imagem do backend (Python 3.12 Alpine), aguardará o banco de dados, aplicará as migrações automaticamente (`migrate --noinput`) e coletará os arquivos estáticos (`collectstatic`).
+> O Docker executará o build multi-estágio do frontend (Node -> Nginx Alpine), construirá a imagem do backend (Python 3.12 Alpine), aguardará o banco de dados, aplicará as migrações automaticamente (`migrate --noinput`) — o que **inclui a criação automática das unidades estruturais da UFPI** — e coletará os arquivos estáticos (`collectstatic`).
 
 ### 4. Criar Superusuário Inicial (Admin Master)
 ```bash
@@ -82,32 +82,6 @@ docker compose exec backend python manage.py migrate
 
 # Rodar suíte de testes do backend
 docker compose exec backend python manage.py test apps
-```
-
----
-
-## 🧪 Ambiente de Desenvolvimento Local (Sem Docker)
-
-```bash
-# 1. Back-end (Terminal 1)
-cd backend
-python -m venv venv
-venv\Scripts\activate       # No Linux/macOS: source venv/bin/activate
-pip install -r ../requirements.txt
-python manage.py migrate
-python manage.py bootstrap_admin_master
-python manage.py runserver 8000
-
-# 2. Front-end (Terminal 2)
-cd frontend
-npm install
-npm run dev
-
-# 3. Execução de Testes
-# Backend:
-python backend/manage.py test apps
-# Frontend:
-cd frontend && npm test
 ```
 
 ---
