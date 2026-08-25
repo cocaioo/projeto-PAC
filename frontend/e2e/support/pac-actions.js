@@ -6,7 +6,7 @@ const ACCENT = ".";
 export async function loginAs(page, username) {
   await page.goto("/login");
   await page.getByLabel(new RegExp(`Usu${ACCENT}rio`, "i")).fill(username);
-  await page.getByLabel(/Senha/i).fill(E2E_PASSWORD);
+  await page.getByLabel(/^Senha/i).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.getByRole("button", { name: /Sair/i })).toBeVisible();
 }
