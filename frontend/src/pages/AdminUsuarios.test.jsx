@@ -138,7 +138,13 @@ describe("AdminUsuarios", () => {
     await testUser.selectOptions(screen.getByLabelText(/Unidade/i), "1");
     await testUser.click(await screen.findByLabelText("TIC"));
     
-    await testUser.type(screen.getByLabelText(/Senha/i), "senha123");
+    const senhaInput = screen.getByLabelText(/^Senha/i);
+    const senhaToggle = screen.getByRole("button", { name: "Mostrar senha" });
+    await testUser.click(senhaToggle);
+    expect(senhaInput).toHaveAttribute("type", "text");
+    expect(senhaToggle).toHaveAccessibleName("Ocultar senha");
+    await testUser.click(senhaToggle);
+    await testUser.type(senhaInput, "senha123");
     
     api.createUsuarioAdmin.mockResolvedValue({});
     await testUser.click(screen.getByRole("button", { name: "Salvar Usuário" }));
@@ -192,7 +198,7 @@ describe("AdminUsuarios", () => {
     await testUser.type(screen.getByLabelText(/Nome Completo/i), "Teste");
     await testUser.type(screen.getByLabelText(/E-mail/i), "invalido@teste.com");
     await testUser.selectOptions(screen.getByLabelText(/Unidade/i), "1");
-    await testUser.type(screen.getByLabelText(/Senha/i), "123456");
+    await testUser.type(screen.getByLabelText(/^Senha/i), "123456");
 
     await testUser.click(screen.getByRole("button", { name: "Salvar Usuário" }));
 

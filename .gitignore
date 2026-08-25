@@ -55,3 +55,4 @@ desktop.ini
 
 # Docker volumes
 pgdata/
+frontend/e2e/specs/mvp-pac.spec.js

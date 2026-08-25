@@ -27,6 +27,26 @@ export function AuthProvider({ children }) {
     return usuario;
   }
 
+  async function changePassword(passwords) {
+    const resposta = await api.changePassword(passwords);
+    const respostaTemDadosDeUsuario = Boolean(
+      resposta
+      && typeof resposta === "object"
+      && ("username" in resposta || "email" in resposta || "perfil" in resposta)
+    );
+    const usuarioAtualizado = resposta?.user
+      || resposta?.usuario
+      || (respostaTemDadosDeUsuario ? resposta : null);
+
+    setUser((atual) => ({
+      ...atual,
+      ...(usuarioAtualizado || {}),
+      precisa_trocar_senha: false,
+    }));
+
+    return resposta;
+  }
+
   async function logout() {
     await api.logout();
     setUser(null);
@@ -41,6 +61,7 @@ export function AuthProvider({ children }) {
     user,
     loading,
     login,
+    changePassword,
     logout,
     isAdmin,
     isAdminMaster: Boolean(

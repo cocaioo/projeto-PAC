@@ -8,3 +8,7 @@ media/
 .env
 .env.local
 *.log
+
+# Bancos SQLite locais
+*.sqlite3
+db.sqlite3

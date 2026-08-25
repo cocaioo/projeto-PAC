@@ -1,6 +1,7 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./auth/AuthContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
@@ -17,19 +18,33 @@ import DfdConsolidar from "./pages/DfdConsolidar";
 import SolicitarAcesso from "./pages/SolicitarAcesso";
 import AdminUsuarios from "./pages/AdminUsuarios";
 import Profile from "./pages/Profile";
+import ChangePassword from "./pages/ChangePassword";
 
 const auth = (el) => <ProtectedRoute>{el}</ProtectedRoute>;
 const admin = (el) => <ProtectedRoute adminOnly>{el}</ProtectedRoute>;
 const adminMaster = (el) => <ProtectedRoute adminMasterOnly>{el}</ProtectedRoute>;
 
+function PasswordChangeGate({ children }) {
+  const { user, loading } = useAuth();
+
+  if (!loading && user?.precisa_trocar_senha) {
+    return <Navigate to="/trocar-senha" replace />;
+  }
+
+  return children;
+}
+
+const passwordGate = (el) => <PasswordChangeGate>{el}</PasswordChangeGate>;
+
 // Definição central das rotas da SPA.
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/solicitar-acesso" element={<SolicitarAcesso />} />
+      <Route path="/login" element={passwordGate(<Login />)} />
+      <Route path="/solicitar-acesso" element={passwordGate(<SolicitarAcesso />)} />
+      <Route path="/trocar-senha" element={auth(<ChangePassword />)} />
 
-      <Route element={<Layout />}>
+      <Route element={passwordGate(<Layout />)}>
         <Route index element={<Home />} />
 
         {/* Demandas */}

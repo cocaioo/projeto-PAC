@@ -5,6 +5,8 @@ Convertem os modelos do Django em JSON consumido pelo front-end React.
 """
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.catalogo.models import ItemCatalogo
@@ -115,6 +117,34 @@ class UsuarioMeSerializer(serializers.ModelSerializer):
 
     def get_grupos_administrados(self, obj):
         return self._serializar_grupos_administrados(obj)
+
+
+class AlterarSenhaSerializer(serializers.Serializer):
+    senha_atual = serializers.CharField(write_only=True, trim_whitespace=False)
+    nova_senha = serializers.CharField(write_only=True, trim_whitespace=False)
+    confirmacao_senha = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def _get_user(self):
+        request = self.context.get("request")
+        return request.user
+
+    def validate_senha_atual(self, value):
+        if not self._get_user().check_password(value):
+            raise serializers.ValidationError("A senha atual esta incorreta.")
+        return value
+
+    def validate(self, attrs):
+        if attrs["nova_senha"] != attrs["confirmacao_senha"]:
+            raise serializers.ValidationError(
+                {"confirmacao_senha": "A confirmacao da senha nao confere."}
+            )
+
+        try:
+            validate_password(attrs["nova_senha"], user=self._get_user())
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"nova_senha": list(exc.messages)})
+
+        return attrs
 
 
 # =============================================================================

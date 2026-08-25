@@ -41,6 +41,23 @@ describe("SolicitarAcesso", () => {
     expect(screen.getByRole("option", { name: "Unidade A" })).toBeInTheDocument();
   });
 
+  it("permite mostrar e ocultar as duas senhas do cadastro", async () => {
+    renderWithRouter(<SolicitarAcesso />);
+
+    const passwordFields = [
+      screen.getByLabelText(/^senha/i),
+      screen.getByLabelText(/confirmação/i),
+    ];
+    const toggles = screen.getAllByRole("button", { name: "Mostrar senha" });
+
+    expect(toggles).toHaveLength(2);
+    for (const [index, toggle] of toggles.entries()) {
+      await testUser.click(toggle);
+      expect(passwordFields[index]).toHaveAttribute("type", "text");
+      expect(toggle).toHaveAccessibleName("Ocultar senha");
+    }
+  });
+
   it("valida erro de senhas que não coincidem", async () => {
     renderWithRouter(<SolicitarAcesso />);
     
