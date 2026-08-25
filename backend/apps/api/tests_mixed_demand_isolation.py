@@ -6,6 +6,7 @@ from apps.grupos_contratacao.models import GrupoContratacao
 from apps.catalogo.models import ItemCatalogo
 from apps.demandas.models import Demanda, ItemDemanda, StatusDemanda, CicloPAC, Prioridade, StatusItemDemanda
 from datetime import date
+from django.utils import timezone
 from decimal import Decimal
 
 class MixedDemandIsolationTests(APITestCase):
@@ -33,17 +34,18 @@ class MixedDemandIsolationTests(APITestCase):
         
         # Usuarios
         self.requisitante = Usuario.objects.create_user(
-            username="req", password="123", perfil=Perfil.USUARIO, unidade=self.unidade_requisitante
+            username="req", email="req@test.com", password="123", perfil=Perfil.USUARIO, unidade=self.unidade_requisitante
         )
         self.admin_a = Usuario.objects.create_user(
-            username="admin_a", password="123", perfil=Perfil.ADMIN, unidade=self.unidade_admin_a
+            username="admin_a", email="admin_a@test.com", password="123", perfil=Perfil.ADMIN, unidade=self.unidade_admin_a
         )
         self.admin_a.grupos_administrados.add(self.grupo_a)
         
         # Demanda mista
         self.demanda = Demanda.objects.create(
             usuario=self.requisitante, unidade=self.unidade_requisitante,
-            ciclo_pac=self.ciclo, ano_referencia=2024, status=StatusDemanda.EM_ANDAMENTO
+            ciclo_pac=self.ciclo, ano_referencia=2024, status=StatusDemanda.AGUARDANDO_VALIDACAO,
+            enviada_em=timezone.now()
         )
         self.item_demanda_a = ItemDemanda.objects.create(
             demanda=self.demanda, item_catalogo=self.item_cat_a, status=StatusItemDemanda.AGUARDANDO_VALIDACAO,
@@ -84,17 +86,19 @@ class MixedDemandIsolationTests(APITestCase):
         
         # Admin A tenta validar Item A (Sucesso)
         response = self.client.post("/api/validacoes/decidir/", {
-            "item_id": self.item_demanda_a.id,
+            "item_demanda": self.item_demanda_a.id,
             "acao": "validado",
             "comentario": "Ok"
         })
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if response.status_code != 201:
+            print("Response:", response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.item_demanda_a.refresh_from_db()
         self.assertEqual(self.item_demanda_a.status, StatusItemDemanda.VALIDADA)
         
         # Admin A tenta validar Item B (Falha - IDOR)
         response_b = self.client.post("/api/validacoes/decidir/", {
-            "item_id": self.item_demanda_b.id,
+            "item_demanda": self.item_demanda_b.id,
             "acao": "validado",
             "comentario": "Tentando validar de fora"
         })
