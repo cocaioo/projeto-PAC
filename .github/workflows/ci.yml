@@ -6,10 +6,13 @@ name: CI
 
 on:
   push:
-    branches: [master, dev, main, develop]
+    branches: [master, dev, main, develop, dados-homologados]
   pull_request:
     branches: [master, dev, main, develop]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 # Cancela execuções anteriores da mesma ref ainda em andamento.
 concurrency:
@@ -126,7 +129,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Instalar dependências
-        run: npm ci
+        run: npm ci --no-audit
 
       - name: Auditar dependências de produção
         run: npm audit --omit=dev --audit-level=high
@@ -209,7 +212,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Instalar dependencias do frontend
-        run: npm ci
+        run: npm ci --no-audit
 
       - name: Instalar Chromium e dependencias do sistema
         run: npx playwright install --with-deps chromium
@@ -233,6 +236,8 @@ jobs:
     name: Containers Docker (build e smoke test)
     runs-on: ubuntu-latest
     needs: [test, frontend, e2e]
+    env:
+      PORT: "8080"
 
     steps:
       - name: Checkout do código
@@ -242,12 +247,12 @@ jobs:
         run: cp .env.example .env
 
       - name: Subir serviços e aguardar healthchecks
-        run: docker compose up -d --build --wait
+        run: docker compose up -d --build --wait db backend frontend
 
       - name: Verificar aplicação e API no container
         run: |
-          curl --fail --retry 10 --retry-connrefused http://localhost/
-          curl --fail --retry 10 --retry-connrefused http://localhost/api/auth/csrf/
+          curl --fail --retry 10 --retry-connrefused http://localhost:8080/
+          curl --fail --retry 10 --retry-connrefused http://localhost:8080/api/auth/csrf/
 
       - name: Publicar diagnóstico dos containers
         if: always()

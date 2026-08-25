@@ -167,7 +167,9 @@ export default function Catalogo() {
         title="Catálogo de itens"
         description="Consulte materiais e serviços por nome, código ou grupo de contratação."
         actions={isAdmin && gruposGerenciaveis.length > 0 && (
-          <Button onClick={abrirCadastro}>
+          <Button
+            onClick={abrirCadastro}
+          >
             <i className="bi bi-plus-lg" aria-hidden="true" />Cadastrar item
           </Button>
         )}

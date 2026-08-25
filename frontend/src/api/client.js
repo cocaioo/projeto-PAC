@@ -170,6 +170,7 @@ export const api = {
 
   csrf: () => request("/auth/csrf/"),
   login: (username, password) => request("/auth/login/", { method: "POST", body: { username, password } }),
+  changePassword: (body) => request("/auth/change-password/", { method: "POST", body }),
   logout: () => request("/auth/logout/", { method: "POST" }),
   me: () => request("/auth/me/"),
 

@@ -6,7 +6,7 @@ A regra de negócio replica o fluxo das views server-side originais, agora
 sobre endpoints JSON.
 """
 
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
@@ -65,6 +65,7 @@ from .serializers import (
     ItensElegiveisQuerySerializer,
     UnidadeSerializer,
     UsuarioMeSerializer,
+    AlterarSenhaSerializer,
     ValidacaoSerializer,
     SolicitarAcessoSerializer,
     SolicitacaoAcessoListSerializer,
@@ -180,6 +181,24 @@ def logout_view(request):
 @permission_classes([IsAuthenticated])
 def me_view(request):
     return Response(UsuarioMeSerializer(request.user).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    serializer = AlterarSenhaSerializer(
+        data=request.data,
+        context={"request": request},
+    )
+    serializer.is_valid(raise_exception=True)
+
+    user = request.user
+    user.set_password(serializer.validated_data["nova_senha"])
+    user.precisa_trocar_senha = False
+    user.save(update_fields=["password", "precisa_trocar_senha"])
+    update_session_auth_hash(request, user)
+
+    return Response(UsuarioMeSerializer(user).data)
 
 
 # =============================================================================
