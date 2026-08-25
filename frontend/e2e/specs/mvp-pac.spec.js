@@ -121,7 +121,7 @@ test.describe("MVP PAC", () => {
     const backendDefense = await browserApi(page, `/demandas/${demand.demandId}/itens/`, {
       method: "POST",
       body: {
-        item_catalogo: demand.catalogItemId,
+        item_catalogo: demand.items[0].catalogItemId,
         quantidade: 1,
         data_prevista: `${demand.referenceYear}-07-15`,
         prioridade: "media",
