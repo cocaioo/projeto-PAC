@@ -231,6 +231,17 @@ a { color: var(--pac-color-primary-700); }
 .pac-badge--info { background: var(--pac-color-info-100); color: var(--pac-color-info-700); }
 .pac-badge--primary { background: var(--pac-color-primary-100); color: var(--pac-color-primary-900); }
 
+.profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--pac-space-4); margin-bottom: var(--pac-space-4); }
+.profile-card { min-width: 0; }
+.profile-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--pac-space-3) var(--pac-space-4); margin: 0; }
+.profile-meta dt { color: var(--pac-gray-600); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
+.profile-meta dd { margin: var(--pac-space-1) 0 0; color: var(--pac-gray-950); font-weight: 600; }
+.profile-groups { display: grid; gap: var(--pac-space-3); }
+.profile-groups__list { display: grid; gap: var(--pac-space-3); margin: 0; padding: 0; list-style: none; }
+.profile-groups__list li { border: 1px solid var(--pac-border-color); border-radius: var(--pac-radius-sm); background: var(--pac-gray-50); padding: var(--pac-space-3); }
+.profile-groups__name { display: flex; align-items: center; justify-content: space-between; gap: var(--pac-space-3); margin-bottom: var(--pac-space-2); }
+.profile-scope-banner { display: grid; gap: var(--pac-space-3); }
+
 .pac-state { display: grid; min-height: 12rem; place-items: center; border: 1px dashed var(--pac-gray-300); border-radius: var(--pac-radius-md); background: var(--pac-white); padding: var(--pac-space-6); text-align: center; }
 .pac-state__icon { color: var(--pac-gray-500); font-size: 1.75rem; }
 .pac-state__title { margin: var(--pac-space-2) 0 0; font-size: 1rem; }
@@ -272,6 +283,7 @@ a { color: var(--pac-color-primary-700); }
   .catalogo-filtros, .catalogo-filtros--admin { grid-template-columns: 1fr; }
   .catalogo-paginacao { align-items: flex-start; flex-direction: column; }
   .consolidacao-filters { grid-template-columns: 1fr; }
+  .profile-grid { grid-template-columns: 1fr; }
   .consolidacao-actions, .consolidacao-unit__header, .consolidacao-unit__requests li { align-items: flex-start; flex-direction: column; }
   .pac-action-bar { align-items: stretch; flex-direction: column; }
   .pac-action-bar__actions { justify-content: flex-start; }

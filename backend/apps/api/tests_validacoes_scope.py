@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -50,6 +51,8 @@ class ValidacaoEscopoTests(APITestCase):
         self.grupo_b = GrupoContratacao.objects.create(
             nome="Grupo B", unidade_admin=self.unidade_admin_b
         )
+        self.admin_a.grupos_administrados.add(self.grupo_a)
+        self.admin_b.grupos_administrados.add(self.grupo_b)
         self.catalogo_a = self._catalogo("CAT-A", self.grupo_a)
         self.catalogo_b = self._catalogo("CAT-B", self.grupo_b)
 
@@ -107,6 +110,7 @@ class ValidacaoEscopoTests(APITestCase):
             usuario=usuario,
             ano_referencia=2027,
             status=StatusDemanda.AGUARDANDO_VALIDACAO,
+            enviada_em=timezone.now(),
         )
 
     @staticmethod
@@ -133,7 +137,7 @@ class ValidacaoEscopoTests(APITestCase):
         self.client.force_login(usuario)
         return self.client.get(reverse("api:validacao-pendentes"), query or {})
 
-    def test_admin_lista_apenas_itens_do_grupo_administrado_por_sua_unidade(self):
+    def test_admin_lista_apenas_itens_do_grupo_explicitamente_administrado(self):
         resposta = self._listar(self.admin_a)
 
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
@@ -219,7 +223,11 @@ class ValidacaoEscopoTests(APITestCase):
         self.item_grupo_a.refresh_from_db()
         self.assertEqual(self.item_grupo_a.status, StatusItemDemanda.VALIDADA)
 
-    def test_item_manual_so_pode_ser_decidido_por_admin_master(self):
+    def test_item_manual_pode_ser_decidido_por_admin_da_unidade_solicitante(self):
+        admin_unidade_solicitante = self._usuario(
+            "admin_sol_a", self.unidade_solicitante_a, perfil="admin"
+        )
+        admin_unidade_solicitante.grupos_administrados.add(self.grupo_a)
         self.client.force_login(self.admin_a)
         resposta_admin = self.client.post(
             reverse("api:validacao-decidir"),
@@ -228,13 +236,43 @@ class ValidacaoEscopoTests(APITestCase):
         )
         self.assertEqual(resposta_admin.status_code, status.HTTP_403_FORBIDDEN)
 
-        self.client.force_login(self.admin_master)
-        resposta_master = self.client.post(
+        self.client.force_login(admin_unidade_solicitante)
+        resposta_unidade = self.client.post(
             reverse("api:validacao-decidir"),
             {"item_demanda": self.item_manual.id, "acao": "validado"},
             format="json",
         )
-        self.assertEqual(resposta_master.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resposta_unidade.status_code, status.HTTP_201_CREATED)
+
+    def test_fila_omite_demanda_nao_enviada_ou_com_status_inconsistente(self):
+        demanda_nao_enviada = Demanda.objects.create(
+            unidade=self.unidade_solicitante_a,
+            usuario=self.solicitante_a,
+            ano_referencia=2027,
+            status=StatusDemanda.AGUARDANDO_VALIDACAO,
+        )
+        item_nao_enviado = self._item(
+            demanda_nao_enviada, "Item de demanda nao enviada", self.catalogo_a
+        )
+        demanda_status_inconsistente = Demanda.objects.create(
+            unidade=self.unidade_solicitante_a,
+            usuario=self.solicitante_a,
+            ano_referencia=2027,
+            status=StatusDemanda.RASCUNHO,
+            enviada_em=timezone.now(),
+        )
+        item_status_inconsistente = self._item(
+            demanda_status_inconsistente,
+            "Item de demanda com status inconsistente",
+            self.catalogo_a,
+        )
+
+        resposta = self._listar(self.admin_a)
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        ids_na_fila = {item["id"] for item in resposta.data}
+        self.assertNotIn(item_nao_enviado.id, ids_na_fila)
+        self.assertNotIn(item_status_inconsistente.id, ids_na_fila)
 
     def test_devolucao_rejeita_comentario_composto_so_por_espacos(self):
         self.client.force_login(self.admin_a)
@@ -259,3 +297,38 @@ class ValidacaoEscopoTests(APITestCase):
 
         self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("grupo", resposta.data)
+
+    def test_admin_lista_historico_de_validacoes_apenas_do_proprio_grupo(self):
+        validacao_grupo_a = Validacao.objects.create(
+            item_demanda=self.item_grupo_a,
+            usuario=self.admin_a,
+            acao="validado",
+            comentario="Grupo A",
+        )
+        Validacao.objects.create(
+            item_demanda=self.item_grupo_b,
+            usuario=self.admin_b,
+            acao="devolvido",
+            comentario="Grupo B",
+        )
+
+        self.client.force_login(self.admin_a)
+        resposta = self.client.get(reverse("api:validacao-list"))
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in resposta.data["results"]], [validacao_grupo_a.id])
+
+    def test_admin_de_outro_grupo_recebe_404_ao_consultar_validacao_por_id(self):
+        validacao_grupo_a = Validacao.objects.create(
+            item_demanda=self.item_grupo_a,
+            usuario=self.admin_a,
+            acao="validado",
+            comentario="Grupo A",
+        )
+
+        self.client.force_login(self.admin_b)
+        resposta = self.client.get(
+            reverse("api:validacao-detail", kwargs={"pk": validacao_grupo_a.id})
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_404_NOT_FOUND)

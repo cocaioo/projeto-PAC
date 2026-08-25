@@ -1,15 +1,28 @@
 import { Link, NavLink } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+
+const commonLinks = [
+  { to: "/", label: "Início", icon: "bi-house" },
+];
 
 const userLinks = [
-  { to: "/", label: "Início", icon: "bi-house" },
-  { to: "/demandas", label: "Demandas", icon: "bi-file-earmark-text" },
+  { to: "/demandas", label: "Minhas demandas", icon: "bi-file-earmark-text" },
+];
+
+const sharedLinks = [
   { to: "/catalogo", label: "Catálogo", icon: "bi-box-seam" },
   { to: "/dashboard", label: "Indicadores", icon: "bi-bar-chart" },
+  { to: "/conta", label: "Minha conta", icon: "bi-person" },
 ];
 
 const adminLinks = [
-  { to: "/validacoes", label: "Demandas para validar", icon: "bi-check2-square" },
+  { to: "/validacoes", label: "Pendências de validação", icon: "bi-check2-square" },
+  { to: "/demandas", label: "Todas as Demandas", icon: "bi-files" },
   { to: "/dfds", label: "Documentos DFD", icon: "bi-collection" },
+];
+
+const adminMasterLinks = [
+  { to: "/gestao/usuarios", label: "Gestão de Usuários", icon: "bi-people" },
 ];
 
 function MenuLink({ item }) {
@@ -22,6 +35,7 @@ function MenuLink({ item }) {
 }
 
 export default function Sidebar({ user, isAdmin }) {
+  const { isAdminMaster } = useAuth();
   return (
     <aside className="app-sidebar" aria-label="Navegação principal">
       <Link className="app-brand" to="/">
@@ -30,12 +44,33 @@ export default function Sidebar({ user, isAdmin }) {
       </Link>
       <nav className="app-sidebar__nav">
         <div className="app-sidebar__section">Principal</div>
-        <MenuLink item={userLinks[0]} />
-        {user && userLinks.slice(1).map((item) => <MenuLink item={item} key={item.to} />)}
+        {commonLinks.map((item) => <MenuLink item={item} key={item.to} />)}
+        
+        {user && !isAdmin && (
+          <>
+            <div className="app-sidebar__section">Área do requisitante</div>
+            {userLinks.map((item) => <MenuLink item={item} key={item.to} />)}
+          </>
+        )}
+        
         {isAdmin && (
           <>
             <div className="app-sidebar__section">Administração</div>
             {adminLinks.map((item) => <MenuLink item={item} key={item.to} />)}
+          </>
+        )}
+
+        {user && (
+          <>
+            <div className="app-sidebar__section">Geral</div>
+            {sharedLinks.map((item) => <MenuLink item={item} key={item.to} />)}
+          </>
+        )}
+
+        {isAdminMaster && (
+          <>
+            <div className="app-sidebar__section">Admin Master</div>
+            {adminMasterLinks.map((item) => <MenuLink item={item} key={item.to} />)}
           </>
         )}
       </nav>

@@ -21,9 +21,10 @@ describe("CatalogoFormModal", () => {
   });
 
   it("não envia formulário inválido e associa erros aos campos", async () => {
+    const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(<CatalogoFormModal open grupos={[]} onClose={vi.fn()} onSubmit={onSubmit} />);
-    await userEvent.click(screen.getByRole("button", { name: /cadastrar item/i }));
+    await user.click(screen.getByRole("button", { name: /cadastrar item/i }));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/^Nome/)).toHaveAttribute("aria-invalid", "true");
   });

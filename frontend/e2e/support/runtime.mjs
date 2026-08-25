@@ -8,10 +8,26 @@ export const frontendDir = path.resolve(supportDir, "../..");
 export const repositoryDir = path.resolve(frontendDir, "..");
 export const backendDir = path.join(repositoryDir, "backend");
 export const runtimeDir = path.join(frontendDir, ".e2e");
-export const databaseUrl =
-  process.env.DATABASE_URL
-  || process.env.PAC_E2E_DATABASE_URL
-  || "postgres://pac_user:pac_password@localhost:5433/pac_db";
+const configuredDatabaseUrl =
+  process.env.PAC_E2E_DATABASE_URL || process.env.DATABASE_URL;
+
+if (!configuredDatabaseUrl) {
+  throw new Error(
+    "Defina PAC_E2E_DATABASE_URL para executar os E2E em um banco isolado."
+  );
+}
+
+const databaseName = new URL(configuredDatabaseUrl).pathname.replace(/^\//u, "");
+if (
+  databaseName === "pac_db"
+  && process.env.PAC_E2E_ALLOW_SHARED_DATABASE !== "1"
+) {
+  throw new Error(
+    "O banco pac_db é compartilhado. Use PAC_E2E_DATABASE_URL com um banco E2E isolado."
+  );
+}
+
+export const databaseUrl = configuredDatabaseUrl;
 export const serverStatePath = path.join(runtimeDir, "servers.json");
 
 export function pythonExecutable() {

@@ -5,7 +5,11 @@ import { renderWithRouter } from "../test-utils";
 import Catalogo from "./Catalogo";
 import { api, ApiError } from "../api/client";
 
-const authState = vi.hoisted(() => ({ isAdmin: false }));
+const authState = vi.hoisted(() => ({
+  isAdmin: false,
+  isAdminMaster: false,
+  user: null,
+}));
 
 vi.mock("../auth/AuthContext", () => ({
   useAuth: () => authState,
@@ -43,6 +47,8 @@ const mouse = {
 describe("Catalogo", () => {
   beforeEach(() => {
     authState.isAdmin = false;
+    authState.isAdminMaster = false;
+    authState.user = null;
     api.listGrupos.mockResolvedValue({
       results: [{ id: 2, nome: "TIC", ativo: true }],
     });
@@ -68,6 +74,7 @@ describe("Catalogo", () => {
   it("oferece filtro de situação somente ao ADMIN", async () => {
     const user = userEvent.setup();
     authState.isAdmin = true;
+    authState.user = { grupos_administrados: [{ id: 2, nome: "TIC" }] };
     renderWithRouter(<Catalogo />);
     await screen.findByText("Mouse");
 
@@ -146,6 +153,7 @@ describe("Catalogo", () => {
   it("ADMIN cadastra item e recebe feedback", async () => {
     const user = userEvent.setup();
     authState.isAdmin = true;
+    authState.user = { grupos_administrados: [{ id: 2, nome: "TIC" }] };
     api.createCatalogoItem.mockResolvedValue({
       ...mouse,
       id: 9,
@@ -175,6 +183,7 @@ describe("Catalogo", () => {
   it("ADMIN edita item existente", async () => {
     const user = userEvent.setup();
     authState.isAdmin = true;
+    authState.user = { grupos_administrados: [{ id: 2, nome: "TIC" }] };
     api.updateCatalogoItem.mockResolvedValue({ ...mouse, nome: "Mouse ergonômico" });
     renderWithRouter(<Catalogo />);
     await screen.findByText("Mouse");
@@ -190,6 +199,7 @@ describe("Catalogo", () => {
   it("só desativa depois da confirmação e permite reativar", async () => {
     const user = userEvent.setup();
     authState.isAdmin = true;
+    authState.user = { grupos_administrados: [{ id: 2, nome: "TIC" }] };
     api.desativarCatalogoItem.mockResolvedValue({ ...mouse, ativo: false });
     api.ativarCatalogoItem.mockResolvedValue({ ...mouse, ativo: true });
     renderWithRouter(<Catalogo />);
@@ -200,5 +210,18 @@ describe("Catalogo", () => {
     await waitFor(() => expect(api.desativarCatalogoItem).toHaveBeenCalledWith(1));
     await user.click(await screen.findByRole("button", { name: /ativar/i }));
     await waitFor(() => expect(api.ativarCatalogoItem).toHaveBeenCalledWith(1));
+  });
+
+  it("ADMIN fora do grupo permanece em leitura no catálogo", async () => {
+    authState.isAdmin = true;
+    authState.user = { grupos_administrados: [{ id: 99, nome: "Outro grupo" }] };
+
+    renderWithRouter(<Catalogo />);
+
+    expect(await screen.findByText("Mouse")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cadastrar item/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /editar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /desativar/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/escopo de leitura/i)).toBeInTheDocument();
   });
 });

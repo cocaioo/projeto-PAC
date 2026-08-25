@@ -20,6 +20,7 @@ vi.mock("../api/client", async (importOriginal) => {
 
 const demandaRascunho = {
   id: 7,
+  pode_editar: true,
   unidade_sigla: "STI",
   ano_referencia: 2027,
   usuario_nome: "Ana Silva",
@@ -39,6 +40,7 @@ const demandaRascunho = {
 
 const demandaDevolvida = {
   id: 7,
+  pode_editar: true,
   unidade_sigla: "STI",
   ano_referencia: 2027,
   usuario_nome: "Ana Silva",
@@ -72,6 +74,8 @@ const demandaDevolvida = {
   ],
 };
 
+let testUser;
+
 function renderDetail() {
   return renderWithRouter(<DemandaDetail />, {
     route: "/demandas/7",
@@ -80,11 +84,12 @@ function renderDetail() {
 }
 
 async function confirmarReenvio() {
-  await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
+  await testUser.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
 }
 
 describe("DemandaDetail", () => {
   beforeEach(() => {
+    testUser = userEvent.setup();
     vi.clearAllMocks();
   });
 
@@ -113,11 +118,11 @@ describe("DemandaDetail", () => {
     });
     renderDetail();
     await screen.findByText("Demanda #7");
-    await userEvent.click(
+    await testUser.click(
       screen.getByRole("button", { name: /enviar para validação/i })
     );
     expect(api.enviarDemanda).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
+    await testUser.click(screen.getByRole("button", { name: /confirmar envio/i }));
     await waitFor(() =>
       expect(api.enviarDemanda).toHaveBeenCalledWith("7")
     );
@@ -237,7 +242,7 @@ describe("DemandaDetail", () => {
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
     const btnReenviar = screen.getByRole("button", { name: /reenviar/i });
-    await userEvent.click(btnReenviar);
+    await testUser.click(btnReenviar);
     expect(api.reenviarItem).not.toHaveBeenCalled();
     await confirmarReenvio();
 
@@ -255,7 +260,7 @@ describe("DemandaDetail", () => {
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     await confirmarReenvio();
     expect(
       await screen.findByText(/o valor estimado unitário deve ser maior que zero/i)
@@ -269,7 +274,7 @@ describe("DemandaDetail", () => {
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     await confirmarReenvio();
     expect(
       await screen.findByText(/você não tem permissão para reenviar este item/i)
@@ -283,7 +288,7 @@ describe("DemandaDetail", () => {
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     await confirmarReenvio();
     expect(
       await screen.findByText(/não é permitido alterar solicitações encerradas ou canceladas/i)
@@ -302,15 +307,15 @@ describe("DemandaDetail", () => {
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
     const btnReenviar = screen.getByRole("button", { name: /reenviar/i });
-    await userEvent.click(btnReenviar);
+    await testUser.click(btnReenviar);
 
     const btnConfirmar = screen.getByRole("button", { name: /confirmar reenvio/i });
-    await userEvent.click(btnConfirmar);
+    await testUser.click(btnConfirmar);
 
     expect(btnConfirmar).toBeDisabled();
     expect(api.reenviarItem).toHaveBeenCalledTimes(1);
 
-    await userEvent.click(btnConfirmar);
+    await testUser.click(btnConfirmar);
     expect(api.reenviarItem).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
@@ -363,7 +368,7 @@ describe("DemandaDetail", () => {
 
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     await confirmarReenvio();
 
     expect(await screen.findByText(/item nao encontrado/i)).toBeInTheDocument();
@@ -376,7 +381,7 @@ describe("DemandaDetail", () => {
 
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     await confirmarReenvio();
 
     expect(await screen.findByText(/falha de rede/i)).toBeInTheDocument();
@@ -402,7 +407,7 @@ describe("DemandaDetail", () => {
 
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /reenviar/i }));
+    await testUser.click(screen.getByRole("button", { name: /reenviar/i }));
     await confirmarReenvio();
 
     expect(await screen.findByText(/item reenviado para valida/i)).toBeInTheDocument();
@@ -432,7 +437,7 @@ describe("DemandaDetail", () => {
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
     const btnExcluir = screen.getByRole("button", { name: /excluir rascunho/i });
-    await userEvent.click(btnExcluir);
+    await testUser.click(btnExcluir);
 
     // Dialog appears with confirmation message
     expect(
@@ -442,7 +447,7 @@ describe("DemandaDetail", () => {
     expect(api.deleteDemanda).not.toHaveBeenCalled();
 
     const btnConfirmar = screen.getByRole("button", { name: /confirmar exclusão/i });
-    await userEvent.click(btnConfirmar);
+    await testUser.click(btnConfirmar);
 
     await waitFor(() => {
       expect(api.deleteDemanda).toHaveBeenCalledWith("7");
@@ -456,8 +461,8 @@ describe("DemandaDetail", () => {
     renderDetail();
     expect(await screen.findByText("Demanda #7")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /excluir rascunho/i }));
-    await userEvent.click(screen.getByRole("button", { name: /confirmar exclusão/i }));
+    await testUser.click(screen.getByRole("button", { name: /excluir rascunho/i }));
+    await testUser.click(screen.getByRole("button", { name: /confirmar exclusão/i }));
 
     expect(await screen.findByText(/não foi possível excluir a demanda\./i)).toBeInTheDocument();
   });

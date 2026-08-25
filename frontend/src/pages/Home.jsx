@@ -37,50 +37,34 @@ export default function Home() {
       />
 
       <div className="pac-action-grid">
-        <ActionCard
-          title="Criar nova demanda"
-          description="Registre os itens que sua unidade precisa contratar."
-          to="/demandas/nova"
-          icon="bi-plus-circle"
-          actionLabel="Criar demanda"
-          priority="possible"
-        />
-        <ActionCard
-          title="Corrigir itens devolvidos"
-          description="Abra suas demandas e resolva pendências apontadas pela validação."
-          to="/demandas"
-          icon="bi-arrow-return-left"
-          actionLabel="Ver pendências"
-          priority="required"
-        />
-        <ActionCard
-          title="Demandas"
-          description="Veja status, próxima ação e histórico das solicitações."
-          to="/demandas"
-          icon="bi-file-earmark-text"
-          actionLabel="Acompanhar"
-        />
-        <ActionCard
-          title="Consultar documentos DFD"
-          description="Confira os documentos vinculados aos itens consolidados."
-          to="/dfds"
-          icon="bi-collection"
-          actionLabel="Consultar"
-        />
-        <ActionCard
-          title="Consultar catálogo"
-          description="Pesquise itens e serviços antes de preencher uma demanda."
-          to="/catalogo"
-          icon="bi-search"
-          actionLabel="Buscar"
-        />
-        <ActionCard
-          title="Indicadores"
-          description="Acompanhe os números gerais do PAC."
-          to="/dashboard"
-          icon="bi-bar-chart"
-          actionLabel="Ver indicadores"
-        />
+        {!isAdmin && (
+          <>
+            <ActionCard
+              title="Criar nova demanda"
+              description="Registre os itens que sua unidade precisa contratar."
+              to="/demandas/nova"
+              icon="bi-plus-circle"
+              actionLabel="Criar demanda"
+              priority="possible"
+            />
+            <ActionCard
+              title="Corrigir itens devolvidos"
+              description="Abra suas demandas e resolva pendências apontadas pela validação."
+              to="/demandas"
+              icon="bi-arrow-return-left"
+              actionLabel="Ver pendências"
+              priority="required"
+            />
+            <ActionCard
+              title="Demandas"
+              description="Veja status, próxima ação e histórico das solicitações."
+              to="/demandas"
+              icon="bi-file-earmark-text"
+              actionLabel="Acompanhar"
+            />
+          </>
+        )}
+        
         {isAdmin && (
           <>
             <ActionCard
@@ -99,8 +83,30 @@ export default function Home() {
               actionLabel="Consolidar"
               priority="possible"
             />
+            <ActionCard
+              title="Consultar documentos DFD"
+              description="Confira os documentos vinculados aos itens consolidados."
+              to="/dfds"
+              icon="bi-collection"
+              actionLabel="Consultar"
+            />
           </>
         )}
+        
+        <ActionCard
+          title="Consultar catálogo"
+          description="Pesquise itens e serviços antes de preencher uma demanda."
+          to="/catalogo"
+          icon="bi-search"
+          actionLabel="Buscar"
+        />
+        <ActionCard
+          title="Indicadores"
+          description="Acompanhe os números gerais do PAC."
+          to="/dashboard"
+          icon="bi-bar-chart"
+          actionLabel="Ver indicadores"
+        />
       </div>
     </div>
   );

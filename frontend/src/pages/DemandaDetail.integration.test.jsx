@@ -8,6 +8,7 @@ import DemandaDetail from "./DemandaDetail";
 
 const initialDemand = {
   id: 7,
+  pode_editar: true,
   unidade_sigla: "STI",
   ano_referencia: 2027,
   usuario_nome: "Ana Silva",
@@ -75,6 +76,7 @@ afterAll(() => server.close());
 
 describe("Acompanhamento integrado da demanda", () => {
   it("mostra devolução e DFD e permite reenviar somente o item devolvido", async () => {
+    const user = userEvent.setup();
     renderWithRouter(<DemandaDetail />, {
       route: "/demandas/7",
       path: "/demandas/:id",
@@ -85,9 +87,9 @@ describe("Acompanhamento integrado da demanda", () => {
     expect(screen.getByRole("button", { name: /reenviar item impressora laser/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reenviar item mouse usb/i })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /reenviar item impressora laser/i }));
+    await user.click(screen.getByRole("button", { name: /reenviar item impressora laser/i }));
     expect(demandRequests).toBe(1);
-    await userEvent.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
+    await user.click(screen.getByRole("button", { name: /confirmar reenvio/i }));
 
     expect(await screen.findByText(/item reenviado para validação com sucesso/i)).toBeInTheDocument();
     await waitFor(() => expect(demandRequests).toBe(2));

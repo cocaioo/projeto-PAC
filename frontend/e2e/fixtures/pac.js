@@ -6,11 +6,15 @@ export const USERS = Object.freeze({
   usuario: "usuario_e2e",
   admin: "admin_e2e",
   adminOutroGrupo: "admin_outro_e2e",
+  adminSemAcesso: "admin_sem_acesso_e2e",
   adminMaster: "admin_master_e2e",
 });
 
 export const CATALOG_ITEM = "Notebook E2E";
 export const CATALOG_GROUP = "Tecnologia E2E";
+export const CATALOG_ITEM_GROUP_B = "Servico predial E2E";
+export const CATALOG_GROUP_B = "Obras E2E";
+export const CATALOG_GROUP_C = "Servicos Gerais E2E";
 
 export const test = base.extend({
   marker: async ({}, use, testInfo) => {

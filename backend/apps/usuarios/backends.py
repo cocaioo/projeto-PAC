@@ -9,6 +9,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
+from django.db import models
 
 from .sipac import SipacClient
 
@@ -45,7 +46,13 @@ class SipacAuthBackend(ModelBackend):
                 if user and self.user_can_authenticate(user):
                     return user
 
-        # Fallback transparente para o backend local (ModelBackend)
+        # Fallback transparente para o backend local (ModelBackend) com suporte a email ou username
+        user = Usuario.objects.filter(
+            models.Q(username__iexact=username) | models.Q(email__iexact=username)
+        ).first()
+        if user and user.check_password(password) and self.user_can_authenticate(user):
+            return user
+
         return super().authenticate(request, username=username, password=password, **kwargs)
 
     def _provisionar_ou_atualizar_usuario(self, username, dados_sipac, password=None):

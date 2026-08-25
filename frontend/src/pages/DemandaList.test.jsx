@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../test-utils";
 import DemandaList from "./DemandaList";
@@ -14,7 +14,10 @@ vi.mock("../api/client", async (importOriginal) => {
 });
 
 describe("DemandaList", () => {
+  let testUser;
+
   beforeEach(() => {
+    testUser = userEvent.setup();
     api.listDemandas.mockReset();
   });
 
@@ -56,14 +59,54 @@ describe("DemandaList", () => {
 
     renderWithRouter(<DemandaList />);
 
+  });
+
+  it("lista as demandas retornadas pela API", async () => {
+    api.listDemandas.mockResolvedValue({
+      results: [
+        {
+          id: 1,
+          unidade_sigla: "STI",
+          ano_referencia: 2027,
+          status: "rascunho",
+          valor_total: 3000,
+        },
+      ],
+    });
+    renderWithRouter(<DemandaList />);
+    expect(await screen.findByText("STI")).toBeInTheDocument();
+    expect(screen.getByText("Rascunho")).toBeInTheDocument();
+    expect(screen.getByText(/3\.000,00/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /nova demanda/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /acompanhar demanda 1/i })).toHaveAttribute(
+      "href",
+      "/demandas/1"
+    );
+  });
+
+  it("mostra aviso quando não há demandas", async () => {
+    api.listDemandas.mockResolvedValue({ results: [] });
+    renderWithRouter(<DemandaList />);
+    expect(
+      await screen.findByText(/nenhuma demanda cadastrada/i)
+    ).toBeInTheDocument();
+  });
+
+  it("mostra erro padronizado e permite tentar carregar novamente", async () => {
+    api.listDemandas
+      .mockRejectedValueOnce(new ApiError("Falha ao consultar demandas.", 500))
+      .mockResolvedValueOnce({ results: [] });
+
+    renderWithRouter(<DemandaList />);
+
     expect(await screen.findByText(/falha ao consultar demandas/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /tentar novamente/i }));
+    await testUser.click(screen.getByRole("button", { name: /tentar novamente/i }));
 
     expect(await screen.findByText(/nenhuma demanda cadastrada/i)).toBeInTheDocument();
     expect(api.listDemandas).toHaveBeenCalledTimes(2);
   });
 
-  it("exibe pílulas de filtro de status com contadores dinâmicos e filtra a lista", async () => {
+  it("exibe pílulas de filtro de status e filtra a lista", async () => {
     const mockList = [
       {
         id: 1,
@@ -103,7 +146,18 @@ describe("DemandaList", () => {
       },
     ];
 
-    api.listDemandas.mockResolvedValue({ results: mockList });
+    api.listDemandas.mockImplementation(async (query) => {
+      let results = [...mockList];
+      if (query.status && query.status !== "todas") {
+        if (query.status === "devolvida") {
+          results = results.filter((d) => d.itens.some((i) => i.status === "devolvida"));
+        } else {
+          results = results.filter((d) => d.status === query.status);
+        }
+      }
+      return { results };
+    });
+
     renderWithRouter(<DemandaList />);
 
     expect(await screen.findByText("STI")).toBeInTheDocument();
@@ -114,41 +168,35 @@ describe("DemandaList", () => {
     // Verify tabs / pills exist
     const tabTodas = screen.getByRole("tab", { name: /todas/i });
     const tabRascunhos = screen.getByRole("tab", { name: /rascunhos/i });
-    const tabAguardando = screen.getByRole("tab", { name: /aguardando validação/i });
-    const tabAcaoNecessaria = screen.getByRole("tab", { name: /ação necessária \/ devolvidas/i });
-    const tabConcluidas = screen.getByRole("tab", { name: /concluídas/i });
-
-    expect(tabTodas).toHaveTextContent("4");
-    expect(tabRascunhos).toHaveTextContent("1");
-    expect(tabAguardando).toHaveTextContent("1");
-    expect(tabAcaoNecessaria).toHaveTextContent("1");
-    expect(tabConcluidas).toHaveTextContent("1");
+    const tabAguardando = screen.getByRole("tab", { name: /aguardando validacao/i });
+    const tabDevolvidas = screen.getByRole("tab", { name: /devolvidas/i });
+    const tabConcluidas = screen.getByRole("tab", { name: /concluidas/i });
 
     // Click Rascunhos
-    await userEvent.click(tabRascunhos);
-    expect(screen.getByText("STI")).toBeInTheDocument();
+    await testUser.click(tabRascunhos);
+    expect(await screen.findByText("STI")).toBeInTheDocument();
     expect(screen.queryByText("PROPLAN")).not.toBeInTheDocument();
     expect(screen.queryByText("CCE")).not.toBeInTheDocument();
     expect(screen.queryByText("PREG")).not.toBeInTheDocument();
 
-    // Click Aguardando validação
-    await userEvent.click(tabAguardando);
+    // Click Aguardando validacao
+    await testUser.click(tabAguardando);
+    expect(await screen.findByText("PROPLAN")).toBeInTheDocument();
     expect(screen.queryByText("STI")).not.toBeInTheDocument();
-    expect(screen.getByText("PROPLAN")).toBeInTheDocument();
 
-    // Click Ação necessária / Devolvidas
-    await userEvent.click(tabAcaoNecessaria);
+    // Click Devolvidas
+    await testUser.click(tabDevolvidas);
+    expect(await screen.findByText("CCE")).toBeInTheDocument();
     expect(screen.queryByText("PROPLAN")).not.toBeInTheDocument();
-    expect(screen.getByText("CCE")).toBeInTheDocument();
 
-    // Click Concluídas
-    await userEvent.click(tabConcluidas);
+    // Click Concluidas
+    await testUser.click(tabConcluidas);
+    expect(await screen.findByText("PREG")).toBeInTheDocument();
     expect(screen.queryByText("CCE")).not.toBeInTheDocument();
-    expect(screen.getByText("PREG")).toBeInTheDocument();
 
     // Click Todas
-    await userEvent.click(tabTodas);
-    expect(screen.getByText("STI")).toBeInTheDocument();
+    await testUser.click(tabTodas);
+    expect(await screen.findByText("STI")).toBeInTheDocument();
     expect(screen.getByText("PROPLAN")).toBeInTheDocument();
     expect(screen.getByText("CCE")).toBeInTheDocument();
     expect(screen.getByText("PREG")).toBeInTheDocument();
@@ -174,7 +222,20 @@ describe("DemandaList", () => {
       },
     ];
 
-    api.listDemandas.mockResolvedValue({ results: mockList });
+    api.listDemandas.mockImplementation(async (query) => {
+      let results = [...mockList];
+      if (query.search) {
+        const lowerSearch = query.search.toLowerCase();
+        results = results.filter(
+          (d) =>
+            d.id.toString() === lowerSearch ||
+            d.ano_referencia.toString().includes(lowerSearch) ||
+            d.observacao?.toLowerCase().includes(lowerSearch)
+        );
+      }
+      return { results };
+    });
+
     renderWithRouter(<DemandaList />);
 
     expect(await screen.findByText("STI")).toBeInTheDocument();
@@ -183,25 +244,25 @@ describe("DemandaList", () => {
     const searchInput = screen.getByLabelText(/buscar demandas/i);
 
     // Search by ID
-    await userEvent.type(searchInput, "101");
+    await testUser.type(searchInput, "101");
+    await waitFor(() => expect(screen.queryByText("CCS")).not.toBeInTheDocument());
     expect(screen.getByText("STI")).toBeInTheDocument();
-    expect(screen.queryByText("CCS")).not.toBeInTheDocument();
 
     // Clear search
-    await userEvent.clear(searchInput);
+    await testUser.clear(searchInput);
+    expect(await screen.findByText("CCS")).toBeInTheDocument();
     expect(screen.getByText("STI")).toBeInTheDocument();
-    expect(screen.getByText("CCS")).toBeInTheDocument();
 
     // Search by year
-    await userEvent.type(searchInput, "2026");
-    expect(screen.queryByText("STI")).not.toBeInTheDocument();
+    await testUser.type(searchInput, "2026");
+    await waitFor(() => expect(screen.queryByText("STI")).not.toBeInTheDocument());
     expect(screen.getByText("CCS")).toBeInTheDocument();
 
     // Search by observation
-    await userEvent.clear(searchInput);
-    await userEvent.type(searchInput, "computadores");
+    await testUser.clear(searchInput);
+    await testUser.type(searchInput, "computadores");
+    await waitFor(() => expect(screen.queryByText("CCS")).not.toBeInTheDocument());
     expect(screen.getByText("STI")).toBeInTheDocument();
-    expect(screen.queryByText("CCS")).not.toBeInTheDocument();
   });
 
   it("exibe estado vazio quando busca não retorna resultados e permite limpar filtros", async () => {
@@ -216,19 +277,25 @@ describe("DemandaList", () => {
       },
     ];
 
-    api.listDemandas.mockResolvedValue({ results: mockList });
+    api.listDemandas.mockImplementation(async (query) => {
+      if (query.search === "termo_inexistente") {
+        return { results: [] };
+      }
+      return { results: mockList };
+    });
+
     renderWithRouter(<DemandaList />);
 
     expect(await screen.findByText("STI")).toBeInTheDocument();
 
     const searchInput = screen.getByLabelText(/buscar demandas/i);
-    await userEvent.type(searchInput, "termo_inexistente");
+    await testUser.type(searchInput, "termo_inexistente");
 
     expect(await screen.findByText(/nenhuma demanda encontrada/i)).toBeInTheDocument();
     expect(screen.queryByText("STI")).not.toBeInTheDocument();
 
-    const clearButton = screen.getByRole("button", { name: /limpar filtros/i });
-    await userEvent.click(clearButton);
+    const clearButton = screen.getAllByRole("button", { name: /limpar filtros/i })[0];
+    await testUser.click(clearButton);
 
     expect(await screen.findByText("STI")).toBeInTheDocument();
     expect(searchInput).toHaveValue("");

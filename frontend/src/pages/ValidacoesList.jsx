@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ApiErrorMessage from "../components/ApiErrorMessage";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
-import { Card, EmptyState, LoadingState, ProgressSummary, Select } from "../components/ui";
+import { Button, Card, EmptyState, LoadingState, ProgressSummary, Select } from "../components/ui";
 
 export function resultadosDaApi(data) {
   if (Array.isArray(data)) return data;
@@ -63,7 +63,7 @@ function nomesDosGrupos(itens) {
 }
 
 export default function ValidacoesList() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const [itens, setItens] = useState([]);
   const [unidades, setUnidades] = useState([]);
   const [grupos, setGrupos] = useState([]);
@@ -72,9 +72,40 @@ export default function ValidacoesList() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
   const [tentativa, setTentativa] = useState(0);
+  const ultimaRequisicao = useRef(0);
+
+  const carregarPendencias = useCallback(async () => {
+    if (authLoading || !isAdmin) {
+      if (!authLoading) setCarregando(false);
+      return;
+    }
+    const requisicaoAtual = ultimaRequisicao.current + 1;
+    ultimaRequisicao.current = requisicaoAtual;
+    setCarregando(true);
+    setErro(null);
+    try {
+      const data = await api.listPendentes({
+        unidade: unidade || undefined,
+        grupo: grupo || undefined,
+      });
+      if (ultimaRequisicao.current === requisicaoAtual) {
+        setItens(resultadosDaApi(data));
+      }
+    } catch (error) {
+      if (ultimaRequisicao.current === requisicaoAtual) {
+        setItens([]);
+        setErro(error);
+      }
+    } finally {
+      if (ultimaRequisicao.current === requisicaoAtual) {
+        setCarregando(false);
+      }
+    }
+  }, [authLoading, grupo, isAdmin, unidade]);
 
   useEffect(() => {
-    if (!isAdmin) return undefined;
+    // Bug #4: aguardar o AuthContext terminar antes de verificar isAdmin.
+    if (authLoading || !isAdmin) return undefined;
 
     let ativo = true;
     Promise.allSettled([
@@ -93,39 +124,23 @@ export default function ValidacoesList() {
     return () => {
       ativo = false;
     };
-  }, [isAdmin]);
+  }, [authLoading, isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin) {
-      setCarregando(false);
-      return undefined;
-    }
+    carregarPendencias();
+  }, [carregarPendencias, tentativa]);
 
-    let ativo = true;
-    setCarregando(true);
-    setErro(null);
-    api
-      .listPendentes({
-        unidade: unidade || undefined,
-        grupo: grupo || undefined,
-      })
-      .then((data) => {
-        if (ativo) setItens(resultadosDaApi(data));
-      })
-      .catch((error) => {
-        if (!ativo) return;
-        setItens([]);
-        setErro(error);
-      })
-      .finally(() => ativo && setCarregando(false));
-
-    return () => {
-      ativo = false;
-    };
-  }, [grupo, isAdmin, tentativa, unidade]);
+  useEffect(() => {
+    if (authLoading || !isAdmin) return undefined;
+    const atualizarAoRetomar = () => carregarPendencias();
+    window.addEventListener("focus", atualizarAoRetomar);
+    return () => window.removeEventListener("focus", atualizarAoRetomar);
+  }, [authLoading, carregarPendencias, isAdmin]);
 
   const demandas = useMemo(() => agruparItensPorDemanda(itens), [itens]);
   const gruposEnvolvidos = useMemo(() => new Set(itens.map((item) => item.grupo_nome).filter(Boolean)).size, [itens]);
+
+  if (authLoading) return <LoadingState label="Verificando permissoes..." />;
 
   if (!isAdmin) {
     return (
@@ -149,7 +164,13 @@ export default function ValidacoesList() {
       <PageHeader
         eyebrow="Administração"
         title="Demandas recebidas"
-        description="Abra uma demanda para validar ou devolver cada item individualmente."
+        description="Cada cartão representa uma demanda. Abra a análise para validar ou devolver cada item individualmente."
+        actions={(
+          <Button variant="secondary" onClick={() => setTentativa((valor) => valor + 1)} disabled={carregando}>
+            <i className="bi bi-arrow-clockwise" aria-hidden="true" />
+            Atualizar fila
+          </Button>
+        )}
       />
 
       {!carregando && !erro && (
@@ -226,10 +247,10 @@ export default function ValidacoesList() {
                     <Link
                       to={`/validacoes/${demanda.id}`}
                       className="pac-button pac-button--primary"
-                      aria-label={`Abrir demanda ${demanda.id}`}
+                      aria-label={`Analisar itens da demanda ${demanda.id}`}
                     >
                       <i className="bi bi-folder2-open" aria-hidden="true" />
-                      Abrir demanda
+                      Analisar itens
                     </Link>
                   </div>
                 )}
@@ -264,6 +285,11 @@ export default function ValidacoesList() {
                     {gruposDaDemanda.length > 0 ? gruposDaDemanda.join(", ") : "Item manual"}
                   </span>
                 </div>
+                <ul className="mb-0 mt-3" aria-label={`Itens pendentes da demanda ${demanda.id}`}>
+                  {demanda.itens.map((item) => (
+                    <li key={item.id}>{item.nome || `Item #${item.id}`}</li>
+                  ))}
+                </ul>
                 {demanda.observacao && <p className="text-muted mb-0 mt-3">{demanda.observacao}</p>}
               </Card>
             );

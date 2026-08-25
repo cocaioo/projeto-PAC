@@ -3,18 +3,14 @@ import { useAuth } from "../auth/AuthContext";
 import { LoadingState } from "./ui";
 
 // Protege rotas autenticadas e, opcionalmente, recursos administrativos do PAC.
-export default function ProtectedRoute({ children, adminOnly = false }) {
-  const { user, loading, isAdmin } = useAuth();
-  const perfilAdministrativo = Boolean(
-    isAdmin
-      || user?.is_admin_user
-      || user?.perfil === "admin"
-      || user?.perfil === "admin_master"
-  );
+export default function ProtectedRoute({ children, adminOnly = false, adminMasterOnly = false }) {
+  const { user, loading, isAdmin, isAdminMaster } = useAuth();
 
   if (loading) return <LoadingState label="Verificando acesso..." />;
   if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && !perfilAdministrativo) return <Navigate to="/" replace />;
+  // Bug #2: usar isAdmin diretamente do AuthContext em vez de recalcular com os mesmos critérios.
+  if (adminMasterOnly && !isAdminMaster) return <Navigate to="/" replace />;
+  if (adminOnly && !isAdmin) return <Navigate to="/" replace />;
 
   return children;
 }

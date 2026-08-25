@@ -51,6 +51,22 @@ jobs:
   test:
     name: Testes (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pac_db
+          POSTGRES_USER: pac_user
+          POSTGRES_PASSWORD: pac_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pac_user -d pac_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://pac_user:pac_password@localhost:5432/pac_db
     strategy:
       fail-fast: false
       matrix:
@@ -148,6 +164,22 @@ jobs:
     name: Fluxo completo do MVP (Playwright)
     runs-on: ubuntu-latest
     needs: [test, frontend]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pac_e2e
+          POSTGRES_USER: pac_user
+          POSTGRES_PASSWORD: pac_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pac_user -d pac_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PAC_E2E_DATABASE_URL: postgres://pac_user:pac_password@localhost:5432/pac_e2e
     defaults:
       run:
         working-directory: frontend
@@ -196,3 +228,31 @@ jobs:
             frontend/.e2e/*.log
           if-no-files-found: ignore
           retention-days: 7
+
+  containers:
+    name: Containers Docker (build e smoke test)
+    runs-on: ubuntu-latest
+    needs: [test, frontend, e2e]
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Preparar configuração efêmera dos containers
+        run: cp .env.example .env
+
+      - name: Subir serviços e aguardar healthchecks
+        run: docker compose up -d --build --wait
+
+      - name: Verificar aplicação e API no container
+        run: |
+          curl --fail --retry 10 --retry-connrefused http://localhost/
+          curl --fail --retry 10 --retry-connrefused http://localhost/api/auth/csrf/
+
+      - name: Publicar diagnóstico dos containers
+        if: always()
+        run: docker compose ps && docker compose logs --no-color --tail=200
+
+      - name: Encerrar serviços efêmeros
+        if: always()
+        run: docker compose down --volumes --remove-orphans

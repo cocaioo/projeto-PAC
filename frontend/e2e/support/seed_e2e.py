@@ -41,6 +41,10 @@ def seed():
         sigla="E2E-PREUNI",
         defaults={"nome": "Outra Unidade Administradora E2E", "codigo": "E2E-PREUNI", "ativo": True},
     )
+    unidade_sem_acesso, _ = Unidade.objects.update_or_create(
+        sigla="E2E-PRAEC",
+        defaults={"nome": "Terceira Unidade Administradora E2E", "codigo": "E2E-PRAEC", "ativo": True},
+    )
 
     grupo_principal, _ = GrupoContratacao.objects.update_or_create(
         nome="Tecnologia E2E",
@@ -51,6 +55,11 @@ def seed():
         nome="Obras E2E",
         unidade_admin=unidade_outro_admin,
         defaults={"descricao": "Grupo fora do escopo do administrador principal.", "ativo": True},
+    )
+    grupo_sem_acesso, _ = GrupoContratacao.objects.update_or_create(
+        nome="Servicos Gerais E2E",
+        unidade_admin=unidade_sem_acesso,
+        defaults={"descricao": "Terceiro grupo usado para provar a negacao de acesso.", "ativo": True},
     )
 
     ItemCatalogo.objects.update_or_create(
@@ -77,11 +86,24 @@ def seed():
             "ativo": True,
         },
     )
+    ItemCatalogo.objects.update_or_create(
+        nome="Material esportivo E2E",
+        grupo=grupo_sem_acesso,
+        defaults={
+            "tipo": "material",
+            "descricao": "Item do terceiro grupo, fora da demanda multi-grupo.",
+            "codigo_catmat_catser": "E2E-CAT-003",
+            "unidade_medida": "kit",
+            "valor_estimado": Decimal("800.00"),
+            "ativo": True,
+        },
+    )
 
     usuarios = (
         ("usuario_e2e", Perfil.USUARIO, unidade_usuario, False),
         ("admin_e2e", Perfil.ADMIN, unidade_admin, True),
         ("admin_outro_e2e", Perfil.ADMIN, unidade_outro_admin, True),
+        ("admin_sem_acesso_e2e", Perfil.ADMIN, unidade_sem_acesso, True),
         ("admin_master_e2e", Perfil.ADMIN_MASTER, unidade_admin, True),
     )
     Usuario = get_user_model()
@@ -102,6 +124,12 @@ def seed():
         )
         usuario.set_password(PASSWORD)
         usuario.save(update_fields=["password"])
+
+    # O escopo dos validadores E2E precisa ser explícito, sem depender do
+    # fallback legado pela unidade administrativa.
+    Usuario.objects.get(username="admin_e2e").grupos_administrados.set([grupo_principal])
+    Usuario.objects.get(username="admin_outro_e2e").grupos_administrados.set([grupo_outro])
+    Usuario.objects.get(username="admin_sem_acesso_e2e").grupos_administrados.set([grupo_sem_acesso])
 
 
 if __name__ == "__main__":

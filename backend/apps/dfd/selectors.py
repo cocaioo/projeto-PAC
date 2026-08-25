@@ -30,10 +30,10 @@ def listar_itens_elegiveis(*, usuario, ciclo_pac_id=None, item_catalogo_id=None,
     if grupo_contratacao_id:
         queryset = queryset.filter(item_catalogo__grupo_id=grupo_contratacao_id)
     if not getattr(usuario, "is_admin_master_user", False):
-        if not getattr(usuario, "unidade_id", None):
+        if not getattr(usuario, "is_admin_user", False):
             return queryset.none()
         queryset = queryset.filter(
-            item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
+            usuario.filtro_grupos_administrados("item_catalogo__grupo")
         )
     return queryset.order_by(
         "-demanda__ciclo_pac__ano",

@@ -26,7 +26,7 @@ function paginationFrom(data) {
 }
 
 export default function Catalogo() {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin, isAdminMaster } = useAuth();
   const [itens, setItens] = useState([]);
   const [grupos, setGrupos] = useState([]);
   const [busca, setBusca] = useState("");
@@ -44,6 +44,15 @@ export default function Catalogo() {
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const buscaDebounced = useDebouncedValue(busca, SEARCH_DELAY);
+  const gruposAdministrados = Array.isArray(user?.grupos_administrados)
+    ? user.grupos_administrados
+    : [];
+  const gruposAdministradosIds = new Set(
+    gruposAdministrados.map((item) => Number(item.id))
+  );
+  const gruposGerenciaveis = isAdminMaster
+    ? grupos
+    : grupos.filter((item) => gruposAdministradosIds.has(Number(item.id)));
 
   useEffect(() => {
     let mounted = true;
@@ -81,6 +90,11 @@ export default function Catalogo() {
 
   const itensVisiveis = isAdmin ? itens : itens.filter((item) => item.ativo !== false);
   const filtrosAplicados = Boolean(buscaDebounced.trim() || grupo || (isAdmin && ativo !== ""));
+
+  function podeGerenciarItem(item) {
+    if (isAdminMaster) return true;
+    return gruposAdministradosIds.has(Number(item.grupo));
+  }
 
   function limparFiltros() {
     setBusca("");
@@ -152,7 +166,7 @@ export default function Catalogo() {
         eyebrow="Planejamento e contratações"
         title="Catálogo de itens"
         description="Consulte materiais e serviços por nome, código ou grupo de contratação."
-        actions={isAdmin && (
+        actions={isAdmin && gruposGerenciaveis.length > 0 && (
           <Button onClick={abrirCadastro}>
             <i className="bi bi-plus-lg" aria-hidden="true" />Cadastrar item
           </Button>
@@ -213,10 +227,18 @@ export default function Catalogo() {
                 <td>{item.codigo_catmat_catser || "—"}</td><td>{item.nome}</td><td className="text-capitalize">{item.tipo}</td><td>{item.grupo_nome || "—"}</td><td>{item.unidade_medida}</td><td>{formatCurrency(item.valor_estimado)}</td>
                 {isAdmin && <td><Badge variant={item.ativo === false ? "neutral" : "success"} icon={item.ativo === false ? "bi-slash-circle" : "bi-check-circle"}>{item.ativo === false ? "Inativo" : "Ativo"}</Badge></td>}
                 {isAdmin && (
-                  <td className="text-end"><div className="d-inline-flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => abrirEdicao(item)}><i className="bi bi-pencil" aria-hidden="true" />Editar</Button>
-                    <Button variant={item.ativo === false ? "success" : "danger"} size="sm" onClick={() => item.ativo === false ? alterarSituacao(item, true) : setItemParaDesativar(item)}>{item.ativo === false ? "Ativar" : "Desativar"}</Button>
-                  </div></td>
+                  <td className="text-end">
+                    {podeGerenciarItem(item) ? (
+                      <div className="d-inline-flex gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => abrirEdicao(item)}><i className="bi bi-pencil" aria-hidden="true" />Editar</Button>
+                        <Button variant={item.ativo === false ? "success" : "danger"} size="sm" onClick={() => item.ativo === false ? alterarSituacao(item, true) : setItemParaDesativar(item)}>{item.ativo === false ? "Ativar" : "Desativar"}</Button>
+                      </div>
+                    ) : (
+                      <span className="text-muted small">
+                        Escopo de leitura
+                      </span>
+                    )}
+                  </td>
                 )}
               </tr>
             ))}</tbody>
@@ -233,7 +255,7 @@ export default function Catalogo() {
         </>
       )}
 
-      {isAdmin && <CatalogoFormModal open={formAberto} item={itemEditando} grupos={grupos} busy={salvando} requestError={erroMutacao} onClose={() => { setFormAberto(false); setErroMutacao(null); }} onSubmit={salvarItem} />}
+      {isAdmin && <CatalogoFormModal open={formAberto} item={itemEditando} grupos={gruposGerenciaveis} busy={salvando} requestError={erroMutacao} onClose={() => { setFormAberto(false); setErroMutacao(null); }} onSubmit={salvarItem} />}
       <Modal
         open={Boolean(isAdmin && itemParaDesativar)}
         title="Desativar item do catálogo"

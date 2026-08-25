@@ -111,10 +111,10 @@ class SeedHomologacaoTests(TestCase):
         unit_siglas = [definition[1] for definition in UNIDADES]
         group_names = [definition[1] for definition in GRUPOS]
         catalog_codes = [definition["codigo"] for definition in CATALOGO]
-        self.assertEqual(len(UNIDADES), 17)
+        self.assertEqual(len(UNIDADES), 30)
         self.assertEqual(len(GRUPOS), 5)
         self.assertEqual(len(CATALOGO), 41)
-        self.assertEqual(Unidade.objects.filter(sigla__in=unit_siglas).count(), 17)
+        self.assertEqual(Unidade.objects.filter(sigla__in=unit_siglas).count(), 30)
         self.assertFalse(
             Unidade.objects.filter(sigla__in=unit_siglas, ativo=False).exists()
         )
@@ -230,7 +230,7 @@ class SeedHomologacaoTests(TestCase):
         )
 
         report = self.relatorio_json(output)
-        self.assertEqual(report["counts"]["unidades"], 17)
+        self.assertEqual(report["counts"]["unidades"], 30)
         self.assertEqual(report["counts"]["grupos"], 5)
         self.assertEqual(report["counts"]["catalogo"], 41)
         self.assertEqual(report["counts"]["demandas"], 41)
@@ -668,7 +668,7 @@ class SeedHomologacaoTests(TestCase):
         colliding_dfd = DFD.objects.get(numero=f"{DFD_PREFIX}001")
         colliding_dfd.observacao = "Documento institucional sem namespace reservado."
         colliding_dfd.save(update_fields=["observacao"])
-        seed_unit = Unidade.objects.get(sigla="HML-STI")
+        seed_unit = Unidade.objects.get(sigla="STI")
         seed_unit.ativo = False
         seed_unit.save(update_fields=["ativo"])
         seed_catalog_item = ItemCatalogo.objects.get(
@@ -724,7 +724,7 @@ class SeedHomologacaoTests(TestCase):
 
     def test_nao_altera_unidade_nem_ciclo_institucional_real(self):
         real_unit = Unidade.objects.create(
-            sigla="STI",
+            sigla="STI-REAL",
             nome="Superintendência institucional",
             codigo="STI-REAL",
             ativo=False,
@@ -794,6 +794,7 @@ class SeedHomologacaoTests(TestCase):
                 sigla__in=[definition[1] for definition in UNIDADES]
             ).exists()
         )
+
         self.assertFalse(
             ItemCatalogo.objects.filter(
                 codigo_catmat_catser__in=[

@@ -64,9 +64,9 @@ describe("Layout", () => {
       logout: vi.fn(),
     });
     renderLayout();
-    expect(screen.getByText("Demandas")).toBeInTheDocument();
+    expect(screen.getByText("Minhas demandas")).toBeInTheDocument();
     expect(screen.getByText("Ana Silva")).toBeInTheDocument();
-    expect(screen.queryByText("Demandas para validar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pendências de validação")).not.toBeInTheDocument();
   });
 
   it("não mostra menus administrativos apenas por is_staff", () => {
@@ -76,7 +76,7 @@ describe("Layout", () => {
       logout: vi.fn(),
     });
     renderLayout();
-    expect(screen.queryByText("Demandas para validar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pendências de validação")).not.toBeInTheDocument();
     expect(screen.queryByText("Documentos DFD")).not.toBeInTheDocument();
   });
 
@@ -88,7 +88,7 @@ describe("Layout", () => {
       logout: vi.fn(),
     });
     renderLayout();
-    expect(screen.getByText("Demandas para validar")).toBeInTheDocument();
+    expect(screen.getByText("Pendências de validação")).toBeInTheDocument();
     expect(screen.getByText("Documentos DFD")).toBeInTheDocument();
   });
 });

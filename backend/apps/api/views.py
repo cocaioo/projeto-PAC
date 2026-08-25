@@ -9,6 +9,7 @@ sobre endpoints JSON.
 from django.contrib.auth import authenticate, login, logout
 from django.db import transaction
 from django.db.models import Count, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.middleware.csrf import get_token
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -20,6 +21,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.auditoria.models import LogAuditoria
 from apps.catalogo.models import ItemCatalogo
 from apps.demandas.constants import pode_transicionar_demanda, pode_transicionar_item
 from apps.demandas.models import Demanda, ItemDemanda, StatusDemanda, StatusItemDemanda
@@ -39,9 +41,19 @@ from apps.dfd.selectors import (
 from apps.dfd.services import ConflitoConsolidacao, consolidar_itens_em_dfd
 from apps.grupos_contratacao.models import GrupoContratacao
 from apps.unidades.models import Unidade
+from apps.usuarios.models import SolicitacaoAcesso, Usuario
+from apps.usuarios.services import (
+    solicitar_acesso,
+    aprovar_solicitacao,
+    rejeitar_solicitacao,
+    criar_usuario_admin,
+    alterar_status_usuario,
+    excluir_usuario,
+)
 from apps.validacoes.models import TipoAcao, Validacao
 
 from .permissions import IsAdminMasterUserPermission, IsAdminUserPermission
+from .filters import DemandaFilterSet
 from .serializers import (
     DemandaSerializer,
     DFDSerializer,
@@ -52,8 +64,14 @@ from .serializers import (
     ItemDemandaSerializer,
     ItensElegiveisQuerySerializer,
     UnidadeSerializer,
-    UsuarioSerializer,
+    UsuarioMeSerializer,
     ValidacaoSerializer,
+    SolicitarAcessoSerializer,
+    SolicitacaoAcessoListSerializer,
+    DecisaoSolicitacaoSerializer,
+    CriarUsuarioAdminSerializer,
+    UsuarioAdminListSerializer,
+    UsuarioStatusUpdateSerializer,
 )
 from .validation_serializers import ItemPendenteValidacaoSerializer
 
@@ -68,10 +86,15 @@ def demandas_no_escopo_do_usuario(queryset, usuario):
         return queryset
     if getattr(usuario, "is_admin_user", False):
         filtro = Q(usuario=usuario)
-        if usuario.unidade_id:
-            filtro |= Q(
-                itens__item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
+        if usuario.grupos_administrados.filter(ativo=True).exists():
+            escopo_administrativo = usuario.filtro_grupos_administrados(
+                "itens__item_catalogo__grupo"
             )
+            if usuario.unidade_id:
+                escopo_administrativo |= Q(
+                    itens__item_catalogo__isnull=True, unidade_id=usuario.unidade_id
+                )
+            filtro |= ~Q(status=StatusDemanda.RASCUNHO) & escopo_administrativo
         return queryset.filter(filtro).distinct()
     return queryset.filter(usuario=usuario)
 
@@ -82,10 +105,15 @@ def itens_no_escopo_do_usuario(queryset, usuario):
         return queryset
     if getattr(usuario, "is_admin_user", False):
         filtro = Q(demanda__usuario=usuario)
-        if usuario.unidade_id:
-            filtro |= Q(
-                item_catalogo__grupo__unidade_admin_id=usuario.unidade_id
+        if usuario.grupos_administrados.filter(ativo=True).exists():
+            escopo_administrativo = usuario.filtro_grupos_administrados(
+                "item_catalogo__grupo"
             )
+            if usuario.unidade_id:
+                escopo_administrativo |= Q(
+                    item_catalogo__isnull=True, demanda__unidade_id=usuario.unidade_id
+                )
+            filtro |= ~Q(demanda__status=StatusDemanda.RASCUNHO) & escopo_administrativo
         return queryset.filter(filtro).distinct()
     return queryset.filter(demanda__usuario=usuario)
 
@@ -98,8 +126,8 @@ def dfds_no_escopo_do_usuario(queryset, usuario):
     filtro = Q(itens_demanda__demanda__usuario=usuario) | Q(
         itens_vinculados__demanda__usuario=usuario
     )
-    if getattr(usuario, "is_admin_user", False) and usuario.unidade_id:
-        filtro |= Q(grupo__unidade_admin_id=usuario.unidade_id)
+    if getattr(usuario, "is_admin_user", False) and not usuario.is_admin_master_user:
+        filtro |= usuario.filtro_grupos_administrados("grupo")
     return queryset.filter(filtro).distinct()
 
 
@@ -117,7 +145,11 @@ def csrf(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
-    username = request.data.get("username")
+    username = (
+        request.data.get("username")
+        or request.data.get("email")
+        or request.data.get("login")
+    )
     password = request.data.get("password")
 
     if not username or not password:
@@ -134,7 +166,7 @@ def login_view(request):
         )
 
     login(request, user)
-    return Response(UsuarioSerializer(user).data)
+    return Response(UsuarioMeSerializer(user).data)
 
 
 @api_view(["POST"])
@@ -147,7 +179,7 @@ def logout_view(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me_view(request):
-    return Response(UsuarioSerializer(request.user).data)
+    return Response(UsuarioMeSerializer(request.user).data)
 
 
 # =============================================================================
@@ -161,7 +193,16 @@ class UnidadeViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in {"create", "update", "partial_update", "destroy"}:
             return [IsAuthenticated(), IsAdminMasterUserPermission()]
-        return [IsAuthenticated()]
+        return [AllowAny()]
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Esta unidade possui registros vinculados. Desative-a em vez de exclui-la."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class GrupoContratacaoViewSet(viewsets.ModelViewSet):
@@ -172,6 +213,15 @@ class GrupoContratacaoViewSet(viewsets.ModelViewSet):
         if self.action in {"create", "update", "partial_update", "destroy"}:
             return [IsAuthenticated(), IsAdminMasterUserPermission()]
         return [IsAuthenticated()]
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Este grupo possui registros vinculados. Desative-o em vez de exclui-lo."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class ItemCatalogoViewSet(viewsets.ModelViewSet):
@@ -189,8 +239,7 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
             return
         if (
             getattr(usuario, "is_admin_user", False)
-            and usuario.unidade_id
-            and grupo.unidade_admin_id == usuario.unidade_id
+            and usuario.pode_administrar_grupo(grupo)
         ):
             return
         raise PermissionDenied(
@@ -211,6 +260,15 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         self._validar_grupo_para_mutacao(instance.grupo)
         instance.delete()
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Este item possui demandas vinculadas. Desative-o em vez de exclui-lo."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -262,6 +320,10 @@ class ItemCatalogoViewSet(viewsets.ModelViewSet):
 
 class DemandaViewSet(viewsets.ModelViewSet):
     serializer_class = DemandaSerializer
+    filterset_class = DemandaFilterSet
+    search_fields = ["id", "ano_referencia", "observacao", "unidade__sigla", "unidade__nome"]
+    ordering_fields = ["criado_em", "atualizado_em", "enviada_em", "status"]
+    ordering = ["-criado_em"]
 
     def get_queryset(self):
         from django.db.models import Prefetch
@@ -289,7 +351,10 @@ class DemandaViewSet(viewsets.ModelViewSet):
             Demanda.objects.select_related("unidade", "usuario")
             .prefetch_related(itens_prefetch)
         )
-        return demandas_no_escopo_do_usuario(qs, user)
+        qs = demandas_no_escopo_do_usuario(qs, user)
+        if str(self.request.query_params.get("proprias", "")).lower() in {"1", "true", "sim"}:
+            qs = qs.filter(usuario=user)
+        return qs
 
     def perform_create(self, serializer):
         unidade = getattr(self.request.user, "unidade", None)
@@ -310,11 +375,18 @@ class DemandaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if demanda.usuario_id == user.id or user.is_admin_master_user:
             return True
-        if not user.is_admin_user or not user.unidade_id:
+        if (
+            not user.is_admin_user
+            or not user.grupos_administrados.filter(ativo=True).exists()
+        ):
             return False
-        return not demanda.itens.exclude(
-            item_catalogo__grupo__unidade_admin_id=user.unidade_id
-        ).exists()
+        itens_no_escopo = user.filtro_grupos_administrados("item_catalogo__grupo")
+        if user.unidade_id:
+            itens_no_escopo |= Q(
+                item_catalogo__isnull=True,
+                demanda__unidade_id=user.unidade_id,
+            )
+        return not demanda.itens.exclude(itens_no_escopo).exists()
 
     def update(self, request, *args, **kwargs):
         demanda = self.get_object()
@@ -347,7 +419,13 @@ class DemandaViewSet(viewsets.ModelViewSet):
                 {"detail": "Somente demandas em rascunho podem ser excluídas."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return super().destroy(request, *args, **kwargs)
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Esta demanda possui registros vinculados e nao pode ser excluida."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
     @action(detail=True, methods=["get", "post"])
     def itens(self, request, pk=None):
@@ -430,7 +508,17 @@ class DemandaViewSet(viewsets.ModelViewSet):
             demanda.save(update_fields=["enviada_em", "atualizado_em"])
             demanda.itens.update(status=StatusItemDemanda.AGUARDANDO_VALIDACAO)
             sincronizar_status_macro_demanda(demanda)
-            return Response(DemandaSerializer(demanda).data)
+            LogAuditoria.objects.create(
+                usuario=request.user,
+                acao="demanda_enviada_validacao",
+                modelo="Demanda",
+                objeto_id=demanda.id,
+                dados_novos={
+                    "status": demanda.status,
+                    "item_ids": list(demanda.itens.values_list("id", flat=True)),
+                },
+            )
+            return Response(DemandaSerializer(demanda, context={"request": request}).data)
 
     @action(detail=True, methods=["post"])
     def cancelar(self, request, pk=None):
@@ -456,6 +544,11 @@ class DemandaViewSet(viewsets.ModelViewSet):
             if demanda.status == StatusDemanda.CONCLUIDA:
                 return Response(
                     {"detail": "Solicitações concluídas não podem ser canceladas."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if demanda.itens.filter(status=StatusItemDemanda.VINCULADA_DFD).exists():
+                return Response(
+                    {"detail": "Demandas com itens vinculados a DFD não podem ser canceladas."},
                     status=status.HTTP_409_CONFLICT,
                 )
 
@@ -505,8 +598,8 @@ class ItemDemandaViewSetLegacy(viewsets.ModelViewSet):
             )
         
         with transaction.atomic():
-            response = super().update(request, *args, **kwargs)
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
+            response = super().update(request, *args, **kwargs)
             sincronizar_status_macro_demanda(demanda_locked)
             return response
 
@@ -525,18 +618,29 @@ class ItemDemandaViewSetLegacy(viewsets.ModelViewSet):
 
         with transaction.atomic():
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
-            response = super().destroy(request, *args, **kwargs)
+            try:
+                response = super().destroy(request, *args, **kwargs)
+            except ProtectedError:
+                return Response(
+                    {"detail": "Este item possui registros vinculados e nao pode ser excluido."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             sincronizar_status_macro_demanda(demanda_locked)
             return response
 
     @action(detail=True, methods=["post"])
     def reenviar(self, request, pk=None):
         with transaction.atomic():
-            item = ItemDemanda.objects.select_for_update(of=("self",)).select_related("demanda").filter(pk=pk).first()
-            if item is None:
+            item_ref = ItemDemanda.objects.filter(pk=pk).values("demanda_id").first()
+            if item_ref is None:
                 return Response({"detail": "Item não encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-            demanda = Demanda.objects.select_for_update().get(pk=item.demanda_id)
+            demanda = Demanda.objects.select_for_update().get(pk=item_ref["demanda_id"])
+            item = (
+                ItemDemanda.objects.select_for_update(of=("self",))
+                .select_related("demanda")
+                .get(pk=pk, demanda_id=demanda.pk)
+            )
 
             if not self._pode_editar(item):
                 return Response(
@@ -593,7 +697,7 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
         return ItemDemandaSerializer
 
     def get_queryset(self):
-        from django.db.models import Prefetch, Q
+        from django.db.models import Prefetch
         from apps.validacoes.models import Validacao, TipoAcao
 
         ultima_devolucao_prefetch = Prefetch(
@@ -610,14 +714,7 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
             .prefetch_related(ultima_devolucao_prefetch)
         )
         user = self.request.user
-        if getattr(user, "is_admin_master_user", False):
-            return qs
-        if getattr(user, "is_admin_user", False):
-            return qs.filter(
-                Q(demanda__usuario=user)
-                | Q(item_catalogo__isnull=False, item_catalogo__grupo__unidade_admin_id=user.unidade_id)
-            )
-        return qs.filter(demanda__usuario=user)
+        return itens_no_escopo_do_usuario(qs, user)
 
     def retrieve(self, request, *args, **kwargs):
         item = self.get_object()
@@ -690,7 +787,13 @@ class ItemDemandaViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
-            response = super().destroy(request, *args, **kwargs)
+            try:
+                response = super().destroy(request, *args, **kwargs)
+            except ProtectedError:
+                return Response(
+                    {"detail": "Este item possui registros vinculados e nao pode ser excluido."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             sincronizar_status_macro_demanda(demanda_locked)
             return response
 
@@ -723,31 +826,51 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ValidacaoSerializer
     permission_classes = [IsAuthenticated, IsAdminUserPermission]
 
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related(
+            "item_demanda__item_catalogo__grupo"
+        )
+        user = self.request.user
+        if user.is_admin_master_user:
+            return queryset
+        if not user.grupos_administrados.filter(ativo=True).exists():
+            return queryset.none()
+        filtro = user.filtro_grupos_administrados("item_demanda__item_catalogo__grupo")
+        if user.unidade_id:
+            filtro |= Q(
+                item_demanda__item_catalogo__isnull=True,
+                item_demanda__demanda__unidade_id=user.unidade_id
+            )
+        return queryset.filter(filtro)
+
     @staticmethod
     def _itens_no_escopo_do_usuario(queryset, user):
         """Restringe ADMIN ao grupo administrado pela sua unidade.
-
-        Itens manuais nao possuem grupo que permita determinar o responsavel.
-        Por seguranca, eles ficam disponiveis somente para ADMIN MASTER.
+        Também permite que ADMIN valide itens manuais caso tenham sido
+        criados pela sua própria unidade.
         """
         if user.is_admin_master_user:
             return queryset
-        if not user.unidade_id:
+        if not user.grupos_administrados.filter(ativo=True).exists():
             return queryset.none()
-        return queryset.filter(
-            item_catalogo__isnull=False,
-            item_catalogo__grupo__unidade_admin_id=user.unidade_id,
-        )
+        filtro = user.filtro_grupos_administrados("item_catalogo__grupo")
+        if user.unidade_id:
+            filtro |= Q(
+                item_catalogo__isnull=True,
+                demanda__unidade_id=user.unidade_id
+            )
+        return queryset.filter(filtro)
 
     @staticmethod
     def _usuario_pode_decidir_item(user, item):
         if user.is_admin_master_user:
             return True
-        return bool(
-            user.unidade_id
-            and item.item_catalogo_id
-            and item.item_catalogo.grupo.unidade_admin_id == user.unidade_id
-        )
+        if not user.grupos_administrados.filter(ativo=True).exists():
+            return False
+        if item.item_catalogo_id:
+            return user.pode_administrar_grupo(item.item_catalogo.grupo)
+        
+        return bool(user.unidade_id and item.demanda.unidade_id == user.unidade_id)
 
     @staticmethod
     def _filtro_id(request, nome, *aliases):
@@ -774,6 +897,9 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
     def pendentes(self, request):
         from django.db.models import Prefetch
 
+        demanda_id, erro = self._filtro_id(request, "demanda", "demanda_id")
+        if erro:
+            return erro
         unidade_id, erro = self._filtro_id(request, "unidade", "unidade_id")
         if erro:
             return erro
@@ -792,7 +918,12 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
         )
         itens = (
             ItemDemanda.objects.filter(
-                status=StatusItemDemanda.AGUARDANDO_VALIDACAO
+                status=StatusItemDemanda.AGUARDANDO_VALIDACAO,
+                demanda__enviada_em__isnull=False,
+                demanda__status__in=(
+                    StatusDemanda.AGUARDANDO_VALIDACAO,
+                    StatusDemanda.EM_ANDAMENTO,
+                ),
             )
             .select_related(
                 "demanda",
@@ -805,6 +936,8 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
             .prefetch_related(ultima_devolucao_prefetch)
         )
         itens = self._itens_no_escopo_do_usuario(itens, request.user)
+        if demanda_id is not None:
+            itens = itens.filter(demanda_id=demanda_id)
         if unidade_id is not None:
             itens = itens.filter(demanda__unidade_id=unidade_id)
         if grupo_id is not None:
@@ -845,12 +978,20 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
             # Nao usa select_related no lock porque item_catalogo e anulavel;
             # no PostgreSQL, FOR UPDATE sobre o lado anulavel de um OUTER JOIN
             # e rejeitado. As relacoes de escopo sao carregadas sob a transacao.
-            item = ItemDemanda.objects.select_for_update().filter(pk=item_id).first()
+            item_ref = ItemDemanda.objects.filter(pk=item_id).values("demanda_id").first()
+            item = None if item_ref is None else ItemDemanda.objects.filter(pk=item_id).first()
             if item is None:
                 return Response(
                     {"detail": "Item não encontrado."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
+
+            demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
+            item = (
+                ItemDemanda.objects.select_for_update(of=("self",))
+                .select_related("demanda", "item_catalogo__grupo__unidade_admin")
+                .get(pk=item_id, demanda_id=demanda_locked.pk)
+            )
 
             if not self._usuario_pode_decidir_item(request.user, item):
                 return Response(
@@ -863,7 +1004,18 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-            demanda_locked = Demanda.objects.select_for_update().get(pk=item.demanda_id)
+            if (
+                demanda_locked.enviada_em is None
+                or demanda_locked.status not in {
+                    StatusDemanda.AGUARDANDO_VALIDACAO,
+                    StatusDemanda.EM_ANDAMENTO,
+                }
+            ):
+                return Response(
+                    {"detail": "A demanda não está em um estado válido para decisão."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
             if demanda_locked.status in [StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA]:
                 return Response(
                     {"detail": "Não é permitido alterar solicitações encerradas ou canceladas."},
@@ -900,6 +1052,19 @@ class ValidacaoViewSet(viewsets.ReadOnlyModelViewSet):
                 comentario=comentario,
             )
             sincronizar_status_macro_demanda(demanda_locked)
+            LogAuditoria.objects.create(
+                usuario=request.user,
+                acao=f"item_{acao}",
+                modelo="ItemDemanda",
+                objeto_id=item.id,
+                dados_anteriores={"status": StatusItemDemanda.AGUARDANDO_VALIDACAO},
+                dados_novos={
+                    "status": novo_status,
+                    "demanda_id": demanda_locked.id,
+                    "grupo_id": item.item_catalogo.grupo_id if item.item_catalogo_id else None,
+                    "comentario": comentario,
+                },
+            )
             return Response(
                 ValidacaoSerializer(validacao).data, status=status.HTTP_201_CREATED
             )
@@ -999,13 +1164,18 @@ class ConsolidarDFDView(APIView):
             )
         if (
             not request.user.is_admin_master_user
-            and request.user.unidade_id != grupo.unidade_admin_id
+            and not request.user.pode_administrar_grupo(grupo)
         ):
             return Response(
                 {"detail": "Voce nao tem permissao para consolidar itens deste grupo."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         with transaction.atomic():
+            item_refs = list(ItemDemanda.objects.filter(id__in=item_ids).values("id", "demanda_id"))
+            if len(item_refs) != len(item_ids):
+                return Response({"detail": "Um ou mais itens nao foram encontrados."}, status=status.HTTP_400_BAD_REQUEST)
+            demanda_ids = sorted({item["demanda_id"] for item in item_refs})
+            list(Demanda.objects.select_for_update().filter(id__in=demanda_ids).order_by("id"))
             itens = list(
                 ItemDemanda.objects.select_for_update(of=("self",))
                 .select_related("item_catalogo", "item_catalogo__grupo", "demanda__ciclo_pac")
@@ -1022,7 +1192,7 @@ class ConsolidarDFDView(APIView):
                     {"detail": "Todos os itens catalogados devem pertencer ao grupo informado."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            demandas = list(Demanda.objects.select_for_update().filter(id__in={item.demanda_id for item in itens}).order_by("id"))
+            demandas = list(Demanda.objects.filter(id__in=demanda_ids).order_by("id"))
             if any(d.status in [StatusDemanda.CONCLUIDA, StatusDemanda.CANCELADA] for d in demandas):
                 return Response({"detail": "Solicitacao encerrada ou cancelada."}, status=status.HTTP_409_CONFLICT)
             if any(not pode_transicionar_item(item.status, StatusItemDemanda.VINCULADA_DFD) for item in itens):
@@ -1064,10 +1234,8 @@ class DFDViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         if self.request.user.is_admin_master_user:
             return queryset
-        if not self.request.user.unidade_id:
-            return queryset.none()
         return queryset.filter(
-            grupo__unidade_admin_id=self.request.user.unidade_id
+            self.request.user.filtro_grupos_administrados("grupo")
         )
 
     @action(detail=False, methods=["get"])
@@ -1086,8 +1254,8 @@ class DFDViewSet(viewsets.ModelViewSet):
         )
         if not request.user.is_admin_master_user:
             itens = itens.filter(
+                request.user.filtro_grupos_administrados("item_catalogo__grupo"),
                 item_catalogo__isnull=False,
-                item_catalogo__grupo__unidade_admin_id=request.user.unidade_id,
             )
         return Response(ItemDemandaSerializer(itens, many=True).data)
 
@@ -1105,17 +1273,25 @@ class DFDViewSet(viewsets.ModelViewSet):
             )
 
         with transaction.atomic():
-            itens = list(ItemDemanda.objects.select_for_update().filter(id__in=item_ids))
-            if len(itens) != len(item_ids):
+            item_refs = list(ItemDemanda.objects.filter(id__in=item_ids).values("id", "demanda_id"))
+            itens = None if len(item_refs) != len(item_ids) else list(
+                ItemDemanda.objects.filter(id__in=item_ids)
+            )
+            if itens is None:
                 return Response(
                     {"detail": "Um ou mais itens não foram encontrados."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # Ordena e bloqueia deterministicamente as demandas afetadas por ID para evitar deadlock
-            demanda_ids = sorted(set(item.demanda_id for item in itens))
+            demanda_ids = sorted({item["demanda_id"] for item in item_refs})
             demandas_locked = list(
                 Demanda.objects.select_for_update().filter(id__in=demanda_ids).order_by("id")
+            )
+            itens = list(
+                ItemDemanda.objects.select_for_update(of=("self",))
+                .select_related("item_catalogo", "item_catalogo__grupo")
+                .filter(id__in=item_ids).order_by("id")
             )
 
             for demanda in demandas_locked:
@@ -1125,7 +1301,35 @@ class DFDViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_409_CONFLICT,
                     )
 
+            grupo = GrupoContratacao.objects.filter(pk=grupo_id).first()
+            if grupo is None:
+                return Response(
+                    {"detail": "Grupo de contratacao nao encontrado."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if (
+                not request.user.is_admin_master_user
+                and not request.user.pode_administrar_grupo(grupo)
+            ):
+                return Response(
+                    {"detail": "Voce nao tem permissao para consolidar itens deste grupo."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             for item in itens:
+                if (
+                    not request.user.is_admin_master_user
+                    and not request.user.pode_administrar_grupo(item.item_catalogo.grupo)
+                ):
+                    return Response(
+                        {"detail": "Voce nao tem permissao para consolidar itens deste grupo."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                if item.item_catalogo.grupo_id != grupo.pk:
+                    return Response(
+                        {"detail": "Todos os itens precisam pertencer ao grupo informado."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 if not pode_transicionar_item(item.status, StatusItemDemanda.VINCULADA_DFD):
                     return Response(
                         {"detail": f"Item #{item.id} em status '{item.status}' não pode ser consolidado/vinculado."},
@@ -1186,3 +1390,140 @@ class DashboardStatsView(APIView):
                 "total_dfds": dfds.count(),
             }
         )
+
+
+# =============================================================================
+# GESTÃO DE ACESSOS E USUÁRIOS
+# =============================================================================
+
+class SolicitarAcessoView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = SolicitarAcessoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            unidade = Unidade.objects.get(id=serializer.validated_data['unidade_id'])
+            solicitar_acesso(
+                nome_completo=serializer.validated_data['nome_completo'],
+                email=serializer.validated_data['email'],
+                unidade=unidade,
+                senha=serializer.validated_data['senha']
+            )
+            return Response({"message": "Solicitação enviada com sucesso."}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminSolicitacoesListView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def get(self, request):
+        status_filter = request.query_params.get('status', None)
+        queryset = SolicitacaoAcesso.objects.all().order_by('-criado_em')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+            
+        serializer = SolicitacaoAcessoListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+class AdminAprovarSolicitacaoView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def post(self, request, pk):
+        serializer = DecisaoSolicitacaoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            aprovar_solicitacao(
+                solicitacao_id=pk,
+                admin_master_user=request.user,
+                perfil=serializer.validated_data["perfil"],
+                grupos_ids=serializer.validated_data.get("grupos_administrados", []),
+            )
+            return Response({"message": "Solicitação aprovada."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminRejeitarSolicitacaoView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def post(self, request, pk):
+        serializer = DecisaoSolicitacaoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            rejeitar_solicitacao(
+                solicitacao_id=pk, 
+                admin_master_user=request.user, 
+                justificativa=serializer.validated_data.get('justificativa', '')
+            )
+            return Response({"message": "Solicitação rejeitada."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminUsuariosView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def get(self, request):
+        users = Usuario.objects.all().select_related('unidade').prefetch_related('grupos_administrados').order_by('first_name')
+        perfil = request.query_params.get('perfil')
+        unidade = request.query_params.get('unidade')
+        if perfil:
+            users = users.filter(perfil=perfil)
+        if unidade:
+            users = users.filter(unidade_id=unidade)
+        serializer = UsuarioAdminListSerializer(users, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = CriarUsuarioAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            unidade = Unidade.objects.get(id=serializer.validated_data['unidade_id'])
+            criar_usuario_admin(
+                admin_master_user=request.user,
+                nome_completo=serializer.validated_data['nome_completo'],
+                email=serializer.validated_data['email'],
+                unidade=unidade,
+                perfil=serializer.validated_data['perfil'],
+                senha_temporaria=serializer.validated_data['senha_temporaria'],
+                grupos_ids=serializer.validated_data.get('grupos_administrados', []),
+            )
+            return Response({"message": "Usuário criado com sucesso."}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminUsuarioStatusView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def patch(self, request, pk):
+        serializer = UsuarioStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            alterar_status_usuario(
+                admin_master_user=request.user,
+                usuario_id=pk,
+                is_active=serializer.validated_data['is_active']
+            )
+            return Response({"message": "Status atualizado."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminUsuarioDetailView(APIView):
+    permission_classes = [IsAdminMasterUserPermission]
+
+    def delete(self, request, pk):
+        try:
+            excluir_usuario(
+                admin_master_user=request.user,
+                usuario_id=pk
+            )
+            return Response({"message": "Usuário excluído com sucesso."}, status=status.HTTP_200_OK)
+        except Usuario.DoesNotExist:
+            return Response({"error": "Usuário não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            msg = e.message if hasattr(e, 'message') else str(e)
+            if msg.startswith("['") and msg.endswith("']"):
+                msg = msg[2:-2]
+            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+
