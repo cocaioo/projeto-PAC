@@ -4,6 +4,7 @@ Django settings for PAC UFPI.
 Configurações do projeto PAC - Plano Anual de Contratações da UFPI.
 """
 
+import sys
 from pathlib import Path
 
 from decouple import config
@@ -11,6 +12,7 @@ import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+TESTING = 'test' in sys.argv
 
 
 # =============================================================================
