@@ -160,6 +160,11 @@ a { color: var(--pac-color-primary-700); }
 .pac-field__hint { color: var(--pac-gray-600); }
 .pac-field__error { color: var(--pac-color-danger-700); }
 .pac-input { display: block; width: 100%; border: 1px solid var(--pac-gray-300); border-radius: var(--pac-radius-sm); background: var(--pac-white); color: var(--pac-gray-950); padding: 0.58rem 0.72rem; }
+.pac-password-input { position: relative; }
+.pac-password-input__field { padding-right: 3rem; }
+.pac-password-input__toggle { position: absolute; top: 50%; right: 0.35rem; display: grid; width: 2.25rem; height: 2.25rem; transform: translateY(-50%); place-items: center; border: 0; border-radius: var(--pac-radius-sm); background: transparent; color: var(--pac-gray-600); }
+.pac-password-input__toggle:hover { background: var(--pac-gray-100); color: var(--pac-gray-950); }
+.pac-password-input__toggle:disabled { cursor: not-allowed; opacity: 0.58; }
 .pac-input[aria-invalid="true"] { border-color: var(--pac-color-danger-700); }
 
 .pac-table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--pac-border-color); border-radius: var(--pac-radius-md); background: var(--pac-white); }
