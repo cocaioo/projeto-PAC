@@ -8,6 +8,7 @@ from django.core.management import CommandError, call_command
 from django.test import TestCase
 
 from apps.usuarios.management.commands.bootstrap_admin_master import (
+    DEFAULT_BOOTSTRAP_PASSWORD,
     EMAIL_ENV,
     PASSWORD_ENV,
     USERNAME_ENV,
@@ -37,13 +38,10 @@ def bootstrap_environment(**values):
 class BootstrapAdminMasterCommandTests(TestCase):
     def execute_with_environment(self, *, username, email, password=TEST_PASSWORD):
         output = StringIO()
-        with bootstrap_environment(
-            **{
-                USERNAME_ENV: username,
-                EMAIL_ENV: email,
-                PASSWORD_ENV: password,
-            }
-        ):
+        values = {USERNAME_ENV: username, EMAIL_ENV: email}
+        if password is not None:
+            values[PASSWORD_ENV] = password
+        with bootstrap_environment(**values):
             call_command("bootstrap_admin_master", no_input=True, stdout=output)
         return output.getvalue()
 
@@ -64,21 +62,30 @@ class BootstrapAdminMasterCommandTests(TestCase):
         self.assertTrue(check_password(TEST_PASSWORD, usuario.password))
         self.assertNotIn(TEST_PASSWORD, output)
 
-    def test_modo_interativo_pede_confirmacao_com_senha_oculta(self):
+    def test_usa_senha_temporaria_padrao_quando_override_nao_e_informado(self):
+        self.execute_with_environment(
+            username="admin_master_padrao",
+            email="admin.padrao@ufpi.edu.br",
+            password=None,
+        )
+
+        usuario = Usuario.objects.get()
+        self.assertTrue(check_password(DEFAULT_BOOTSTRAP_PASSWORD, usuario.password))
+        self.assertTrue(usuario.precisa_trocar_senha)
+
+    def test_modo_interativo_usa_senha_temporaria_padrao(self):
         output = StringIO()
         with bootstrap_environment():
             with mock.patch(
                 "builtins.input",
                 side_effect=["admin_master_interativo", "interativo@ufpi.edu.br"],
-            ), mock.patch(
-                "getpass.getpass",
-                side_effect=[TEST_PASSWORD, TEST_PASSWORD],
-            ) as getpass_mock:
+            ):
                 call_command("bootstrap_admin_master", stdout=output)
 
-        self.assertTrue(Usuario.objects.filter(username="admin_master_interativo").exists())
-        self.assertEqual(getpass_mock.call_count, 2)
-        self.assertNotIn(TEST_PASSWORD, output.getvalue())
+        usuario = Usuario.objects.get(username="admin_master_interativo")
+        self.assertTrue(check_password(DEFAULT_BOOTSTRAP_PASSWORD, usuario.password))
+        self.assertTrue(usuario.precisa_trocar_senha)
+        self.assertNotIn(DEFAULT_BOOTSTRAP_PASSWORD, output.getvalue())
 
     def test_segunda_execucao_e_idempotente_e_preserva_dados(self):
         self.execute_with_environment(
@@ -177,14 +184,11 @@ class BootstrapAdminMasterCommandTests(TestCase):
         self.assertEqual(Usuario.objects.count(), 0)
         self.assertNotIn("12345678", output.getvalue())
 
-    def test_modo_nao_interativo_exige_as_tres_variaveis(self):
+    def test_modo_nao_interativo_exige_username_e_email(self):
         output = StringIO()
-        with self.assertRaisesMessage(CommandError, PASSWORD_ENV):
+        with self.assertRaisesMessage(CommandError, f"{USERNAME_ENV}, {EMAIL_ENV}"):
             with bootstrap_environment(
-                **{
-                    USERNAME_ENV: "admin_master_sem_senha",
-                    EMAIL_ENV: "sem.senha@ufpi.edu.br",
-                }
+                **{PASSWORD_ENV: TEST_PASSWORD}
             ):
                 call_command("bootstrap_admin_master", no_input=True, stdout=output)
 

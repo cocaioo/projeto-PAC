@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import getpass
 import os
 
 from django.contrib.auth.password_validation import validate_password
@@ -18,6 +17,7 @@ from apps.usuarios.models import Perfil, Usuario
 USERNAME_ENV = "PAC_BOOTSTRAP_ADMIN_USERNAME"
 EMAIL_ENV = "PAC_BOOTSTRAP_ADMIN_EMAIL"
 PASSWORD_ENV = "PAC_BOOTSTRAP_ADMIN_PASSWORD"
+DEFAULT_BOOTSTRAP_PASSWORD = "PacBootstrap!2026"
 BOOTSTRAP_ENV_VARS = (USERNAME_ENV, EMAIL_ENV, PASSWORD_ENV)
 
 
@@ -33,7 +33,8 @@ class Command(BaseCommand):
             action="store_true",
             help=(
                 "Usa PAC_BOOTSTRAP_ADMIN_USERNAME, PAC_BOOTSTRAP_ADMIN_EMAIL "
-                "e PAC_BOOTSTRAP_ADMIN_PASSWORD sem solicitar entrada."
+                "e, opcionalmente, PAC_BOOTSTRAP_ADMIN_PASSWORD sem solicitar entrada. "
+                "Sem a senha opcional, usa a senha temporaria padrao documentada."
             ),
         )
 
@@ -98,7 +99,11 @@ class Command(BaseCommand):
     def _read_credentials(self, *, no_input):
         if no_input:
             values = {name: os.environ.get(name) for name in BOOTSTRAP_ENV_VARS}
-            missing = [name for name, value in values.items() if not value]
+            missing = [
+                name
+                for name in (USERNAME_ENV, EMAIL_ENV)
+                if not values[name]
+            ]
             if missing:
                 raise CommandError(
                     "Modo não interativo exige as variáveis: "
@@ -108,16 +113,16 @@ class Command(BaseCommand):
             return (
                 values[USERNAME_ENV].strip(),
                 values[EMAIL_ENV].strip(),
-                values[PASSWORD_ENV],
+                values[PASSWORD_ENV] or DEFAULT_BOOTSTRAP_PASSWORD,
             )
 
         username = input("Username: ").strip()
         email = input("E-mail: ").strip()
-        password = getpass.getpass("Senha: ")
-        confirmation = getpass.getpass("Confirme a senha: ")
-        if password != confirmation:
-            raise CommandError("As senhas não coincidem.")
-        return username, email, password
+        return (
+            username,
+            email,
+            os.environ.get(PASSWORD_ENV) or DEFAULT_BOOTSTRAP_PASSWORD,
+        )
 
     @staticmethod
     def _validation_message(error):
